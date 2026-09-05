@@ -79,6 +79,9 @@ Deploy `apps/app` as the single active Vercel project:
 
 ## Docs
 
+New to PatchCTL? Follow the [customer getting-started guide](docs/customer-getting-started.md)
+for account registration, operator-assisted database setup, CLI usage, and your first reviewed patch.
+
 For contribution and agent workflows, start with [Contributing](CONTRIBUTING.md), the
 [Engineering Handbook](docs/ENGINEERING-HANDBOOK.md), [agent instructions](AGENTS.md), and the
 [repository skill catalog](docs/ai/skills-management.md). PatchCTL is solo-maintained: local

@@ -1,5 +1,8 @@
 # patchctl
 
+For account registration, database onboarding, and a first reviewed change, start with the
+[customer getting-started guide](../../docs/customer-getting-started.md).
+
 From the repository root:
 
 ```powershell
