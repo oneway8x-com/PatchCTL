@@ -8,6 +8,7 @@ const help = `patchctl — prepare content changes for human review
 Commands:
   sources
   schema SOURCE_ID
+  targets SOURCE_ID FIELD [--after ID]
   read SOURCE_ID [--file query.json | --stdin] [--after ID] [--limit 50]
   validate --file patch.json | --stdin
   propose --file patch.json | --stdin
@@ -57,13 +58,13 @@ async function inputJSON(options, stdin) {
 export async function run(args, { env = process.env, stdin = process.stdin, stdout = process.stdout, stderr = process.stderr, fetchImpl = fetch } = {}) {
   try {
     const { positionals, options } = parse(args);
-    const [command, id] = positionals;
+    const [command, id, field] = positionals;
     if (!command || options.help) { stdout.write(help); return 0; }
-    if (!["sources", "schema", "read", "validate", "propose", "status", "history"].includes(command)) throw new CliError("Unknown command. Run patchctl --help.");
+    if (!["sources", "schema", "targets", "read", "validate", "propose", "status", "history"].includes(command)) throw new CliError("Unknown command. Run patchctl --help.");
     const needsId = ["schema", "read", "status", "history"].includes(command);
-    if (positionals.length !== (needsId ? 2 : 1) || (needsId && !id)) throw new CliError("Invalid command arguments.");
+    if (positionals.length !== (command === "targets" ? 3 : needsId ? 2 : 1) || (needsId && !id)) throw new CliError("Invalid command arguments.");
     if ((options.file || options.stdin) && !["read", "validate", "propose"].includes(command)) throw new CliError("This command does not accept JSON input.");
-    if ((options.after && !["read", "history"].includes(command)) || (options.limit && command !== "read")) throw new CliError("Pagination options are not supported for this command.");
+    if ((options.after && !["read", "history", "targets"].includes(command)) || (options.limit && command !== "read")) throw new CliError("Pagination options are not supported for this command.");
     let body;
     if (["validate", "propose", "read"].includes(command)) {
       if (command !== "read" && !options.file && !options.stdin) throw new CliError("Provide a proposal with --file or --stdin.");
@@ -79,6 +80,7 @@ export async function run(args, { env = process.env, stdin = process.stdin, stdo
       throw new CliError("PATCHCTL_URL must be an HTTPS origin (HTTP is allowed on loopback for development).");
     let path = "/sources", method = "GET";
     if (command === "schema") path = `/sources/${encodeURIComponent(id)}/schema`;
+    if (command === "targets") path = `/sources/${encodeURIComponent(id)}/relations/${encodeURIComponent(field)}${options.after ? `?after=${encodeURIComponent(options.after)}` : ""}`;
     if (command === "read") { path = `/sources/${encodeURIComponent(id)}/records/query`; method = "POST"; }
     if (command === "propose") { path = "/patches"; method = "POST"; }
     if (command === "status") path = `/patches/${encodeURIComponent(id)}`;

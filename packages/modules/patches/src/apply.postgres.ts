@@ -6,6 +6,7 @@ import { lockAndValidateRecords } from "./conflicts.postgres";
 import { sourcePool } from "./postgres";
 import { PatchError } from "./patch.errors";
 import type { Patch } from "./patch";
+import { validateRelationTargets } from "./assignment.postgres";
 
 export class PostgresContentWriter implements ContentWriter {
   async apply(url: string, schema: RegisteredSchema, patch: Patch, actor: Actor): Promise<ApplyReceipt> {
@@ -24,6 +25,7 @@ export class PostgresContentWriter implements ContentWriter {
         return receipt;
       }
       await lockAndValidateRecords(client, schema, patch.tenantId, patch.payload.records);
+      await validateRelationTargets(client, schema, patch.tenantId, patch.payload.records);
       for (const record of patch.payload.records) {
         const values: unknown[] = [];
         const assignments = Object.entries(record.after).map(([field, value]) => { values.push(value); return `${q(field)}=$${values.length}`; });

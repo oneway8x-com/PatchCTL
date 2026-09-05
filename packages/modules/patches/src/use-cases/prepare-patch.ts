@@ -6,10 +6,10 @@ import type { SourceRepository, SourceSecrets } from "../source";
 import { proposalInput, type Patch, type PatchPayload, type PatchRepository, type PatchRecord, type ChangeValue } from "../patch";
 import { PatchError } from "../patch.errors";
 import { requireSource } from "./sources";
-import { validateTextValue } from "../text-value";
+import { validateFieldValue, type RelationReader } from "../assignment";
 import { isMissingText } from "../missing-text";
 
-export async function preparePatch(input: unknown, actor: Actor, sources: SourceRepository, secrets: SourceSecrets, reader: ContentReader, patches: PatchRepository) {
+export async function preparePatch(input: unknown, actor: Actor, sources: SourceRepository, secrets: SourceSecrets, reader: ContentReader, patches: PatchRepository, relations?: RelationReader) {
   authorize(actor, "propose");
   if (Buffer.byteLength(JSON.stringify(input) ?? "") > 2_000_000) throw new PatchError(413, "PATCH_TOO_LARGE", "Patch payload exceeds 2 MB.");
   const parsed = proposalInput.parse(input);
@@ -36,9 +36,8 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
     for (const [name, value] of Object.entries(record.changes)) {
       const field = Object.hasOwn(schema.definition.fields, name) ? schema.definition.fields[name] : undefined;
       if (!field?.editable || !field.readable) throw new PatchError(400, "FIELD_NOT_EDITABLE", `Field ${name} is not editable.`);
-      // Enum/relation write support is enabled only with its dedicated validation use case.
-      if (field.type !== "text") throw new PatchError(400, "UNSUPPORTED_CHANGE", "Only text changes are currently enabled.");
-      try { validateTextValue(value, { nullable: field.nullable, maxLength: field.maxLength }, name); }
+      if (parsed.mode === "fill-missing" && field.type !== "text") throw new PatchError(400, "UNSUPPORTED_CHANGE", "Fill-missing requires text fields.");
+      try { validateFieldValue(value, field, name); }
       catch (error) {
         if (error instanceof PatchError) throw new PatchError(error.status, error.code, error.message, { recordId: record.id, field: name });
         throw error;
@@ -51,6 +50,23 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
       before[name] = previous;
     }
     records.push({ id: record.id, version: record.version, before, after: record.changes });
+  }
+  for (const [name, field] of Object.entries(schema.definition.fields)) {
+    const affected = records.filter(record => Object.hasOwn(record.after, name));
+    if (field.type !== "relation" || !affected.length) continue;
+    if (!relations) throw new PatchError(503, "RELATION_READER_REQUIRED", "Relation validation is not configured.");
+    // Two bounded pages cover at most 100 before and 100 after IDs without N+1 requests.
+    const targets = new Map<string, import("../assignment").RelationTarget>();
+    const ids = [...new Set(affected.flatMap(record => [record.before[name], record.after[name]]).filter((id): id is string => typeof id === "string"))];
+    for (let start = 0; start < ids.length; start += 100) {
+      const result = await relations.targets(url, schema, actor.tenantId, name, { ids: ids.slice(start, start + 100), limit: 100 });
+      for (const target of result.targets) targets.set(target.id, target);
+    }
+    for (const record of affected) {
+      const after = record.after[name] === null ? null : targets.get(String(record.after[name]));
+      if (after === undefined) throw new PatchError(400, "INVALID_RELATION_TARGET", "The relation target is unavailable in this Tenant.", { recordId: record.id, field: name });
+      record.relations = { ...record.relations, [name]: { before: targets.get(String(record.before[name])) ?? null, after } };
+    }
   }
   const payload: PatchPayload = { sourceId: source.id, schemaVersion: parsed.schemaVersion,
     sourceFingerprint: fingerprint({ sourceId: source.id, secretRef: source.secretRef, url }), reason: parsed.reason, mode: parsed.mode,

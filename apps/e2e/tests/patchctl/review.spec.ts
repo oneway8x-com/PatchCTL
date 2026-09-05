@@ -32,6 +32,17 @@ test("does not expose approval to agent credentials even with claimed review per
   await expect(page.getByText("Human review is required. Agent credentials cannot approve or apply patches.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0);
 });
+
+test("shows immutable relation labels alongside stable target IDs", async ({ page }) => {
+  await page.route(`**/api/patchctl/patches/${id}`, route => route.fulfill({ json: { id, tenantId: "tenant", revision: "a".repeat(64), state: "pending", payload: {
+    sourceId: "source", reason: "Assign category", creator: { kind: "agent", id: "agent" }, createdAt: "2026-09-05T10:00:00Z",
+    records: [{ id: "1", before: { category_id: "cat-1" }, after: { category_id: "cat-2" }, relations: { category_id: { before: { id: "cat-1", label: "Old category" }, after: { id: "cat-2", label: "New category" } } } }],
+  } } }));
+  await page.goto(`/patches/${id}`);
+  await expect(page.getByText("cat-1", { exact: true })).toBeVisible();
+  await expect(page.getByText("cat-2", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Old category → New category/)).toBeVisible();
+});
 test("shows a queue entry with the exact proposed record count", async ({ page }) => {
   await page.goto("/patches");
   await expect(page.getByRole("heading", { name: "Content patches" })).toBeVisible();

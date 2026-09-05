@@ -70,6 +70,7 @@ export function PatchDetail({ id }: { id: string }) {
         <h3 className="px-4 pt-4 font-medium">{field}{schemaQuery.data?.definition.fields[field]?.locale ? ` (${schemaQuery.data.definition.fields[field].locale})` : ""}</h3>
         <div className="grid gap-4 p-4 md:grid-cols-2"><div className="rounded-lg bg-red-50 p-4 text-slate-900"><p className="mb-2 text-xs font-bold uppercase">Before</p><Value value={record.before[field]}/></div>
           <div className="rounded-lg bg-emerald-50 p-4 text-slate-900"><p className="mb-2 text-xs font-bold uppercase">After</p><Value value={record.after[field]}/></div></div>
+        {record.relations?.[field] && <p className="px-4 pb-4 text-sm">Relation labels at preparation: {record.relations[field].before?.label ?? "Unavailable / none"} → {record.relations[field].after?.label ?? "None"}. Stable IDs are shown above.</p>}
       </div>)}
     </article>)}</div>
     <div className="flex flex-wrap items-center gap-4"><button className="rounded border px-4 py-2 disabled:opacity-40" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous records</button>

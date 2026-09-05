@@ -19,8 +19,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 13 | #8 Bulk changes | Implemented; bounded batch/stream checks pass |
 | 14 | #9 Missing content/translations | Implemented; 79 feature tests plus 8 CLI checks pass |
 | 15 | #17 English-summary demo | Implemented; real CLI/browser/Postgres demo passes |
-| 16 | #16 Enum/relation assignment | In progress |
-| 17 | #18 Release verification | Pending |
+| 16 | #16 Enum/relation assignment | Implemented; 90 feature tests pass |
+| 17 | #18 Release verification | In progress |
 | 18 | #19 Scheduling | Pending |
 | 19 | #20 Status transitions | Pending |
 

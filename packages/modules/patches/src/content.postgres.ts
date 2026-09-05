@@ -7,7 +7,7 @@ import type { PoolClient } from "pg";
 import { textWhitespace } from "./missing-text";
 
 export function rowProjection(schema: ContentSchema, fields: string[]) {
-  const pairs = fields.flatMap(name => [`'${q(name).slice(1, -1)}'`, `r.${q(name)}`]).join(",");
+  const pairs = fields.flatMap(name => [`'${q(name).slice(1, -1)}'`, `r.${q(name)}${schema.fields[name]?.type === "relation" ? "::text" : ""}`]).join(",");
   return `r.${q(schema.key)}::text AS id, md5(to_jsonb(r)::text || ':' || r.xmin::text) AS version,
     jsonb_build_object(${pairs}) AS values`;
 }

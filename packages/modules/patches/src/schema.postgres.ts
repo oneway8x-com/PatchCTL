@@ -29,7 +29,23 @@ export async function inspectSchema(client: PoolClient, schema: ContentSchema): 
   const isolation = schema.isolation;
   if (isolation.mode === "row" && !columns.some(c => c.name === isolation.tenantColumn && ["text", "varchar", "uuid"].includes(c.type)))
     throw new PatchError(400, "INVALID_SCHEMA", "A valid Tenant column is required.");
-  return fingerprint({ columns, constraints, primary });
+  const enumValues = (await client.query(`SELECT a.attname AS field, e.enumlabel AS value FROM pg_attribute a
+    JOIN pg_enum e ON e.enumtypid=a.atttypid WHERE a.attrelid=to_regclass($1) ORDER BY a.attname,e.enumsortorder`, [table])).rows;
+  const relations: Record<string, string> = {};
+  for (const [name, field] of Object.entries(schema.fields)) {
+    if (field.type === "enum" && columns.find(c => c.name === name)?.kind === "e" && field.values?.some(value => !enumValues.some(e => e.field === name && e.value === value)))
+      throw new PatchError(400, "INVALID_SCHEMA", `Field ${name} declares an unknown database enum value.`);
+    if (field.type !== "relation" || !field.relation) continue;
+    const target = field.relation;
+    const foreignKey = await client.query(`SELECT 1 FROM pg_constraint c JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=c.conkey[1]
+      JOIN pg_attribute b ON b.attrelid=c.confrelid AND b.attnum=c.confkey[1]
+      WHERE c.contype='f' AND c.conrelid=to_regclass($1) AND c.confrelid=to_regclass($2) AND cardinality(c.conkey)=1 AND cardinality(c.confkey)=1
+      AND a.attname=$3 AND b.attname=$4 AND c.convalidated`, [table, tableName(target), name, target.key]);
+    if (!foreignKey.rowCount) throw new PatchError(400, "INVALID_SCHEMA", `Field ${name} requires a validated single-column foreign key to its target.`);
+    relations[name] = await inspectSchema(client, { namespace: target.namespace, table: target.table, key: target.key,
+      isolation: { mode: "row", tenantColumn: target.tenantColumn }, fields: { [target.label]: { type: "text", readable: true, editable: false, nullable: false, maxLength: 10000 } } });
+  }
+  return fingerprint({ columns, constraints, primary, enumValues, relations });
 }
 export class PostgresSchemaInspector implements SchemaInspector {
   async inspect(url: string, schema: ContentSchema) {

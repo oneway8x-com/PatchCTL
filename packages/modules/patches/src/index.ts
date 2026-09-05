@@ -25,3 +25,6 @@ export * from "./use-cases/apply-patch";
 export * from "./audit";
 export * from "./use-cases/patch-history";
 export * from "./request-json";
+export * from "./assignment";
+export * from "./assignment.postgres";
+export * from "./use-cases/read-relation-targets";

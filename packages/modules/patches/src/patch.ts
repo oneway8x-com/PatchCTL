@@ -1,7 +1,9 @@
 import type { Actor } from "./access";
+import type { RelationTarget } from "./assignment";
 export { PatchProposalInputSchema as proposalInput } from "@corely/contracts";
 export type ChangeValue = string | number | null;
-export type PatchRecord = { id: string; version: string; before: Record<string, ChangeValue>; after: Record<string, ChangeValue> };
+export type PatchRecord = { id: string; version: string; before: Record<string, ChangeValue>; after: Record<string, ChangeValue>;
+  relations?: Record<string, { before: RelationTarget | null; after: RelationTarget | null }> };
 export type PatchPayload = { sourceId: string; schemaVersion: string; sourceFingerprint: string; reason: string; agentRunLabel?: string;
   mode?: "edit" | "fill-missing"; translation?: { sourceField: string; targetField: string };
   records: PatchRecord[]; creator: Pick<Actor, "id" | "kind" | "ownerUserId">; createdAt: string };
