@@ -1,0 +1,164 @@
+import { type LoggerPort } from "../ports/logger.port";
+import { type IdempotencyPort } from "../ports/idempotency.port";
+import { type UnitOfWorkPort } from "../ports/unit-of-work.port";
+import { type Result, err, isOk } from "./result";
+import { type UseCaseContext } from "./context";
+import { UseCaseError, ValidationError } from "./errors";
+import { type UseCase } from "./usecase";
+
+type BaseDeps = {
+  logger?: LoggerPort;
+  uow?: UnitOfWorkPort;
+  idempotency?: IdempotencyPort;
+};
+
+type InitializedDeps = BaseDeps & {
+  logger: LoggerPort;
+};
+
+export abstract class BaseUseCase<I, O, E extends UseCaseError = UseCaseError> implements UseCase<
+  I,
+  O,
+  E
+> {
+  private readonly _baseDeps: InitializedDeps;
+
+  protected constructor(deps: BaseDeps) {
+    this._baseDeps = {
+      ...deps,
+      logger: deps.logger || {
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      },
+    } as InitializedDeps;
+  }
+
+  protected get logger(): LoggerPort {
+    return this._baseDeps.logger;
+  }
+
+  protected get uow(): UnitOfWorkPort | undefined {
+    return this._baseDeps.uow;
+  }
+
+  protected get idempotency(): IdempotencyPort | undefined {
+    return this._baseDeps.idempotency;
+  }
+
+  protected validate?(input: I): I;
+  protected getIdempotencyKey?(input: I, ctx: UseCaseContext): string | undefined;
+
+  protected abstract handle(input: I, ctx: UseCaseContext): Promise<Result<O, E>>;
+
+  protected get requiresTenant(): boolean {
+    return false;
+  }
+
+  async execute(input: I, ctx: UseCaseContext): Promise<Result<O, E>> {
+    if (this.requiresTenant && !ctx.tenantId) {
+      return err(new ValidationError("Tenant ID is required") as E);
+    }
+
+    const startedAt = Date.now();
+    const useCaseName = this.constructor.name || "UseCase";
+    const baseMeta = {
+      useCase: useCaseName,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      correlationId: ctx.correlationId,
+      requestId: ctx.requestId,
+    };
+
+    let validatedInput = input;
+    if (this.validate) {
+      try {
+        validatedInput = this.validate(input);
+      } catch (error) {
+        const validationError =
+          error instanceof ValidationError
+            ? error
+            : new ValidationError("Validation failed", error);
+        this._baseDeps.logger.warn(`${useCaseName}.validation_failed`, {
+          ...baseMeta,
+          error: this.toLoggableError(error),
+        });
+        return err(validationError as E);
+      }
+    }
+
+    let runner = () => this.handle(validatedInput, ctx);
+
+    if (this._baseDeps.uow) {
+      const originalRunner = runner;
+      runner = () => this._baseDeps.uow!.withinTransaction(() => originalRunner());
+    }
+
+    const idempotencyKey = this.resolveIdempotencyKey(validatedInput, ctx);
+    if (idempotencyKey && this._baseDeps.idempotency) {
+      const originalRunner = runner;
+      runner = () => this._baseDeps.idempotency!.run(idempotencyKey, () => originalRunner());
+    }
+
+    this._baseDeps.logger.debug(`${useCaseName}.start`, {
+      ...baseMeta,
+      idempotencyKey,
+    });
+
+    try {
+      const result = await runner();
+      const durationMs = Date.now() - startedAt;
+
+      if (isOk(result)) {
+        this._baseDeps.logger.info(`${useCaseName}.success`, { ...baseMeta, durationMs });
+      } else {
+        this._baseDeps.logger.warn(`${useCaseName}.failed`, {
+          ...baseMeta,
+          durationMs,
+          error: this.toLoggableError(result.error),
+        });
+      }
+
+      return result;
+    } catch (error) {
+      const durationMs = Date.now() - startedAt;
+      this._baseDeps.logger.error(`${useCaseName}.unhandled`, {
+        ...baseMeta,
+        durationMs,
+        error: this.toLoggableError(error),
+      });
+
+      if (!(error instanceof UseCaseError)) {
+        throw error;
+      }
+
+      return err(error as E);
+    }
+  }
+
+  private resolveIdempotencyKey(input: I, ctx: UseCaseContext): string | undefined {
+    const keyFromHook = this.getIdempotencyKey?.(input, ctx);
+    if (keyFromHook) {
+      return keyFromHook;
+    }
+
+    if (typeof (input as any)?.idempotencyKey === "string") {
+      return (input as any).idempotencyKey;
+    }
+
+    return undefined;
+  }
+
+  private toLoggableError(error: unknown): unknown {
+    if (error instanceof UseCaseError) {
+      return error.toJSON();
+    }
+
+    if (error instanceof Error) {
+      return { name: error.name, message: error.message, stack: error.stack };
+    }
+
+    return error;
+  }
+}

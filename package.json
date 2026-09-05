@@ -1,0 +1,60 @@
+{
+  "name": "corely",
+  "private": true,
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@10.26.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "dev": "pnpm --filter @corely/app dev",
+    "build": "pnpm build:packages && pnpm --filter @corely/app build",
+    "build:packages": "pnpm --filter @corely/kernel --filter @corely/contracts --filter @corely/prompts --filter @corely/domain --filter @corely/data --filter @corely/storage --filter @corely/email-templates --filter \"@corely/modules-*\" build",
+    "typecheck": "pnpm --filter @corely/data typecheck && pnpm --filter @corely/storage typecheck && pnpm --filter @corely/modules-todos typecheck && pnpm --filter @corely/app typecheck",
+    "dev:app": "pnpm --filter @corely/app dev",
+    "build:app": "pnpm build:packages && pnpm --filter @corely/app build",
+    "prisma:generate": "pnpm --filter @corely/data exec prisma generate",
+    "prisma:migrate": "pnpm --filter @corely/data exec prisma migrate dev",
+    "prisma:studio": "pnpm --filter @corely/data exec prisma studio",
+    "migrate": "pnpm --filter @corely/data exec tsx --env-file=../../.env ../../../node_modules/.bin/prisma migrate dev",
+    "format": "prettier -w .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --cache",
+    "lint:fix": "eslint . --fix --cache",
+    "kill3000": "lsof -ti:3000 | xargs kill -9",
+    "arch:check": "node scripts/architecture-check.mjs",
+    "check": "pnpm lint && pnpm typecheck && pnpm prompt:check",
+    "prompt:check": "node scripts/check-prompts.mjs",
+    "test": "vitest run --workspace ./vitest.workspace.ts",
+    "test:unit": "vitest run --workspace ./vitest.workspace.ts",
+    "test:int": "pnpm prisma:generate && vitest run --workspace ./vitest.workspace.int.ts",
+    "test:watch": "vitest --workspace ./vitest.workspace.ts --watch",
+    "coverage": "vitest run --workspace ./vitest.workspace.ts --coverage"
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "eslint": "catalog:",
+    "globals": "catalog:",
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
+    "prettier": "catalog:",
+    "ts-node": "catalog:",
+    "tsconfig-paths": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vitest": "catalog:"
+  },
+  "author": "Ha Doan <ha@oneway8x.com>",
+  "dependencies": {
+    "@google-cloud/speech": "^7.2.1",
+    "@types/pg": "catalog:",
+    "pg": "catalog:"
+  }
+}

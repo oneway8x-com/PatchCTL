@@ -1,0 +1,46 @@
+{
+  "name": "@corely/app",
+  "private": true,
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "dependencies": {
+    "@corely/api-client": "workspace:*",
+    "@corely/auth-client": "workspace:*",
+    "@corely/contracts": "workspace:*",
+    "@corely/kernel": "workspace:*",
+    "@corely/modules-todos": "workspace:*",
+    "@corely/storage": "workspace:*",
+    "@corely/ui": "workspace:*",
+    "@prisma/adapter-pg": "catalog:",
+    "@prisma/client": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@vercel/blob": "catalog:",
+    "@vercel/functions": "catalog:",
+    "lucide-react": "^0.462.0",
+    "next": "catalog:",
+    "pg": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@corely/tailwind-preset": "workspace:*",
+    "@corely/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "autoprefixer": "catalog:",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:",
+    "tailwindcss-animate": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit"
+  },
+  "author": "Ha Doan <ha@oneway8x.com>"
+}

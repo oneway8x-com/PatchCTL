@@ -1,0 +1,46 @@
+{
+  "extends": "@corely/tsconfig/react.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "allowJs": false,
+    "strict": false,
+    "exactOptionalPropertyTypes": false,
+    "noEmit": true,
+    "incremental": true,
+    "esModuleInterop": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@corely/kernel": ["../../packages/kernel/src/index.ts"],
+      "@corely/kernel/*": ["../../packages/kernel/src/*"],
+      "@corely/api-client": ["../../packages/api-client/src/index.ts"],
+      "@corely/auth-client": ["../../packages/auth-client/src/index.ts"],
+      "@corely/auth-client/*": ["../../packages/auth-client/src/*"],
+      "@corely/contracts": ["../../packages/contracts/src/index.ts"],
+      "@corely/storage": ["../../packages/storage/src/index.ts"],
+      "@corely/storage/*": ["../../packages/storage/src/*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "next-env.d.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

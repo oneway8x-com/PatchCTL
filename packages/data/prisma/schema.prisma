@@ -1,0 +1,765 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===========================
+// Core Multi-Tenancy
+// ===========================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  status    String   @default("ACTIVE") // ACTIVE, SUSPENDED, ARCHIVED
+  timeZone  String   @default("UTC")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  memberships            Membership[]
+  roles                  Role[]
+  apiKeys                ApiKey[]
+  refreshTokens          RefreshToken[]
+  rolePermissionGrants   RolePermissionGrant[]
+  seededRecordMeta       SeededRecordMeta[]
+  billingAccounts        BillingAccount[]
+  billingSubscriptions   BillingSubscription[]
+  billingTrials          BillingTrial[]
+  billingUsageCounters   BillingUsageCounter[]
+  billingProviderEvents  BillingProviderEvent[]
+  integrationConnections IntegrationConnection[]
+  todos                  Todo[]
+
+  @@index([createdAt])
+}
+
+// ===========================
+// Users & Identity
+// ===========================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  status       String   @default("ACTIVE") // ACTIVE, INACTIVE, DELETED
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  partyId      String?
+
+  // Relations
+  memberships          Membership[]
+  refreshTokens        RefreshToken[]
+  passwordResetTokens  PasswordResetToken[]
+  rolePermissionGrants RolePermissionGrant[]
+
+  @@index([email])
+  @@index([createdAt])
+  @@index([partyId])
+}
+
+enum RoleScope {
+  HOST
+  TENANT
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([tenantId, createdAt])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  tenantId    String?
+  name        String
+  scope       RoleScope @default(TENANT)
+  systemKey   String? // OWNER, ADMIN, MEMBER (null for custom roles)
+  description String?
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  tenant               Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships          Membership[]
+  rolePermissions      RolePermission[]
+  rolePermissionGrants RolePermissionGrant[]
+
+  @@unique([tenantId, systemKey])
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, systemKey])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@index([key])
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model RolePermissionGrant {
+  id            String           @id @default(cuid())
+  tenantId      String?
+  roleId        String
+  permissionKey String
+  effect        PermissionEffect @default(ALLOW)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(6)
+  createdBy     String?
+
+  // Relations
+  tenant        Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role          Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdByUser User?   @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, roleId, permissionKey])
+  @@index([tenantId, roleId])
+  @@index([permissionKey])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tenantId  String?
+  tokenHash String
+  revokedAt DateTime?
+  expiresAt DateTime  @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([userId, expiresAt])
+  @@index([tokenHash])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime  @db.Timestamptz(6)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([tokenHash])
+}
+
+model PortalOtpCode {
+  id              String    @id @default(cuid())
+  tenantId        String
+  emailNormalized String
+  codeHash        String
+  expiresAt       DateTime  @db.Timestamptz(6)
+  consumedAt      DateTime? @db.Timestamptz(6)
+  attemptCount    Int       @default(0)
+  maxAttempts     Int       @default(5)
+  lastSentAt      DateTime  @default(now()) @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, emailNormalized])
+  @@index([tenantId, emailNormalized, expiresAt])
+  @@index([expiresAt])
+}
+
+model PortalSession {
+  id               String    @id @default(cuid())
+  tenantId         String
+  userId           String
+  refreshTokenHash String
+  expiresAt        DateTime  @db.Timestamptz(6)
+  revokedAt        DateTime? @db.Timestamptz(6)
+  lastUsedAt       DateTime? @db.Timestamptz(6)
+  userAgent        String?
+  ip               String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, userId])
+  @@index([refreshTokenHash])
+  @@index([expiresAt])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  keyHash    String
+  lastUsedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([keyHash])
+}
+
+// ===========================
+// Extension Storage
+// ===========================
+
+model ExtKv {
+  id        String   @id @default(cuid())
+  tenantId  String
+  moduleId  String
+  scope     String
+  key       String
+  value     Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([tenantId, moduleId, scope, key])
+  @@index([tenantId, moduleId])
+}
+
+model ExtEntityAttr {
+  id         String   @id @default(cuid())
+  tenantId   String
+  moduleId   String
+  entityType String
+  entityId   String
+  attrKey    String
+  attrValue  Json
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([tenantId, moduleId, entityType, entityId, attrKey])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, moduleId])
+}
+
+model ExtEntityLink {
+  id             String   @id @default(cuid())
+  tenantId       String
+  moduleId       String
+  fromEntityType String
+  fromEntityId   String
+  toEntityType   String
+  toEntityId     String
+  linkType       String
+  metadata       Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([tenantId, moduleId, fromEntityType, fromEntityId, toEntityType, toEntityId, linkType])
+  @@index([tenantId, fromEntityType, fromEntityId])
+  @@index([tenantId, toEntityType, toEntityId])
+  @@index([tenantId, moduleId, linkType])
+}
+
+// ===========================
+// Customization
+// ===========================
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  MONEY
+}
+
+model CustomFieldDefinition {
+  id           String          @id @default(cuid())
+  tenantId     String
+  entityType   String
+  key          String
+  label        String
+  description  String?
+  type         CustomFieldType
+  required     Boolean
+  defaultValue Json?
+  options      Json?
+  validation   Json?
+  isIndexed    Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([tenantId, entityType, key])
+  @@index([tenantId, entityType])
+}
+
+model CustomFieldIndex {
+  id          String    @id @default(cuid())
+  tenantId    String
+  entityType  String
+  entityId    String
+  fieldId     String
+  fieldKey    String
+  valueText   String?
+  valueNumber Float?
+  valueDate   DateTime?
+  valueBool   Boolean?
+  valueJson   Json?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([tenantId, entityType, entityId, fieldId])
+  @@index([tenantId, entityType, fieldId])
+  @@index([tenantId, entityType, fieldKey])
+  @@index([tenantId, entityType, valueText])
+  @@index([tenantId, entityType, valueNumber])
+  @@index([tenantId, entityType, valueDate])
+  @@index([tenantId, entityType, valueBool])
+}
+
+model EntityLayout {
+  id         String   @id @default(cuid())
+  tenantId   String
+  entityType String
+  layout     Json
+  version    Int      @default(1)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, entityType])
+}
+
+model DimensionType {
+  id            String   @id @default(cuid())
+  tenantId      String
+  code          String
+  name          String
+  description   String?
+  appliesTo     String[]
+  requiredFor   String[] @default([])
+  allowMultiple Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  values      DimensionValue[]
+  assignments EntityDimension[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model DimensionValue {
+  id        String   @id @default(cuid())
+  tenantId  String
+  typeId    String
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  type        DimensionType     @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  assignments EntityDimension[]
+
+  @@unique([tenantId, typeId, code])
+  @@index([tenantId, typeId, isActive, sortOrder])
+}
+
+model EntityDimension {
+  id         String   @id @default(cuid())
+  tenantId   String
+  entityType String
+  entityId   String
+  typeId     String
+  valueId    String
+  createdAt  DateTime @default(now())
+
+  type  DimensionType  @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  value DimensionValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, entityType, entityId, typeId, valueId])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, entityType, typeId, valueId])
+}
+
+// ===========================
+// Billing
+// ===========================
+
+enum BillingProviderKind {
+  STRIPE
+}
+
+enum BillingSubscriptionStatus {
+  FREE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  UNPAID
+}
+
+enum BillingTrialStatus {
+  ACTIVE
+  EXPIRED
+  SUPERSEDED_BY_SUBSCRIPTION
+}
+
+enum BillingProviderEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+model BillingAccount {
+  id                  String               @id @default(cuid())
+  tenantId            String               @unique
+  provider            BillingProviderKind?
+  providerCustomerRef String?
+  billingCurrency     String               @default("EUR") @db.VarChar(3)
+  email               String?
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
+
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptions  BillingSubscription[]
+  trials         BillingTrial[]
+  providerEvents BillingProviderEvent[]
+
+  @@index([provider, providerCustomerRef])
+}
+
+model BillingSubscription {
+  id                      String                    @id @default(cuid())
+  tenantId                String
+  productKey              String
+  accountId               String
+  planCode                String
+  provider                BillingProviderKind?
+  providerSubscriptionRef String?
+  providerPriceRef        String?
+  status                  BillingSubscriptionStatus @default(FREE)
+  currentPeriodStart      DateTime?                 @db.Timestamptz(6)
+  currentPeriodEnd        DateTime?                 @db.Timestamptz(6)
+  cancelAtPeriodEnd       Boolean                   @default(false)
+  canceledAt              DateTime?                 @db.Timestamptz(6)
+  trialEndsAt             DateTime?                 @db.Timestamptz(6)
+  rawSnapshotJson         Json?
+  lastSyncedAt            DateTime?                 @db.Timestamptz(6)
+  createdAt               DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                  @updatedAt @db.Timestamptz(6)
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account BillingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productKey])
+  @@unique([provider, providerSubscriptionRef])
+  @@index([accountId])
+  @@index([tenantId, productKey, status])
+}
+
+model BillingTrial {
+  id                String             @id @default(cuid())
+  tenantId          String
+  productKey        String
+  accountId         String
+  planCode          String
+  status            BillingTrialStatus @default(ACTIVE)
+  startedAt         DateTime           @db.Timestamptz(6)
+  endsAt            DateTime           @db.Timestamptz(6)
+  expiredAt         DateTime?          @db.Timestamptz(6)
+  supersededAt      DateTime?          @db.Timestamptz(6)
+  activatedByUserId String?
+  source            String?
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(6)
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account BillingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productKey])
+  @@index([status, endsAt])
+  @@index([accountId])
+}
+
+model BillingUsageCounter {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productKey  String
+  metricKey   String
+  periodStart DateTime @db.Timestamptz(6)
+  periodEnd   DateTime @db.Timestamptz(6)
+  quantity    Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productKey, metricKey, periodStart, periodEnd])
+  @@index([tenantId, productKey, metricKey])
+}
+
+model BillingProviderEvent {
+  id              String                     @id @default(cuid())
+  tenantId        String
+  accountId       String?
+  provider        BillingProviderKind
+  externalEventId String
+  eventType       String
+  payloadJson     Json
+  status          BillingProviderEventStatus @default(RECEIVED)
+  errorMessage    String?
+  processedAt     DateTime?                  @db.Timestamptz(6)
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime                   @updatedAt @db.Timestamptz(6)
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account BillingAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalEventId])
+  @@index([tenantId, createdAt])
+  @@index([accountId])
+}
+
+// ===========================
+// Integrations
+// ===========================
+
+model IntegrationConnection {
+  id              String   @id @default(cuid())
+  tenantId        String
+  providerKey     String   @db.VarChar(120)
+  authMethod      String   @db.VarChar(32)
+  status          String   @default("active") @db.VarChar(32)
+  displayName     String?  @db.VarChar(120)
+  configJson      Json?
+  secretEncrypted String?
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, providerKey, status])
+  @@index([providerKey, status])
+}
+
+// ===========================
+// Todos (Reference Feature)
+// ===========================
+
+model Todo {
+  id          String    @id @default(cuid())
+  tenantId    String
+  title       String
+  description String?
+  status      String    @default("open") // "open", "done"
+  priority    String    @default("medium") // "low", "medium", "high"
+  dueDate     DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("todos")
+}
+
+// ===========================
+// AI & Agents
+// ===========================
+
+model AgentRun {
+  id              String    @id @default(cuid())
+  tenantId        String
+  createdByUserId String?
+  title           String?
+  status          String
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  lastMessageAt   DateTime  @default(now())
+  archivedAt      DateTime?
+  metadataJson    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  traceId         String?
+
+  messages       Message[]
+  toolExecutions ToolExecution[]
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, createdByUserId, lastMessageAt(sort: Desc)])
+  @@index([tenantId, createdByUserId, createdAt(sort: Desc)])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  tenantId    String
+  runId       String
+  role        String
+  partsJson   String
+  contentText String?
+  createdAt   DateTime @default(now())
+  traceId     String?
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, runId, createdAt])
+  @@index([tenantId, createdAt(sort: Desc)])
+}
+
+model ToolExecution {
+  id         String    @id @default(cuid())
+  tenantId   String
+  runId      String
+  toolCallId String
+  toolName   String
+  inputJson  String
+  outputJson String?
+  status     String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  errorJson  String?
+  traceId    String?
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, runId, toolCallId])
+}
+
+// -----------------------------------------------------------------------------
+// Operational infrastructure
+// -----------------------------------------------------------------------------
+
+model OutboxEvent {
+  id            String       @id @default(cuid())
+  tenantId      String?
+  eventType     String
+  payloadJson   String
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  availableAt   DateTime     @default(now())
+  lockedBy      String?
+  lockedUntil   DateTime?
+  lastError     String?
+  correlationId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([tenantId, status, availableAt])
+  @@index([status, availableAt, lockedUntil, createdAt])
+}
+
+model DomainEvent {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  eventType String
+  payload   String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, eventType])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  action      String
+  actorUserId String?
+  entity      String
+  entityId    String
+  details     String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, entity, entityId])
+  @@index([tenantId, action])
+}
+
+model IdempotencyKey {
+  id             String    @id @default(cuid())
+  tenantId       String?
+  actionKey      String
+  key            String
+  userId         String?
+  requestHash    String?
+  status         String    @default("IN_PROGRESS")
+  responseJson   String?
+  responseStatus Int?
+  statusCode     Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  expiresAt      DateTime?
+
+  @@unique([tenantId, actionKey, key])
+  @@index([tenantId, actionKey])
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+model SeededRecordMeta {
+  id                    String    @id @default(cuid())
+  tenantId              String    @map("tenant_id")
+  targetTable           String    @map("target_table") // e.g., "ChartOfAccounts", "TaxRate"
+  targetId              String    @map("target_id") // ID of the seeded record
+  sourceTemplateId      String    @map("source_template_id")
+  sourceTemplateVersion String    @map("source_template_version")
+  isCustomized          Boolean   @default(false) @map("is_customized")
+  customizedAt          DateTime? @map("customized_at") @db.Timestamptz(6)
+  customizedByUserId    String?   @map("customized_by_user_id")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, targetTable, targetId])
+  @@index([tenantId, sourceTemplateId])
+  @@index([tenantId, targetTable, isCustomized])
+}

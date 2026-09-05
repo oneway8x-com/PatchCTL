@@ -1,0 +1,10 @@
+<testsuites id="" name="" tests="3" failures="0" skipped="0" errors="0" time="15.225708">
+<testsuite name="todos.spec.ts" timestamp="2026-03-08T11:10:28.809Z" hostname="chromium" tests="3" failures="0" skipped="0" time="5.009" errors="0">
+<testcase name="Todo module › creates a new todo from the UI" classname="todos.spec.ts" time="1.659">
+</testcase>
+<testcase name="Todo module › completes and reopens a todo from the list" classname="todos.spec.ts" time="1.346">
+</testcase>
+<testcase name="Todo module › edits and deletes a todo from the list" classname="todos.spec.ts" time="2.004">
+</testcase>
+</testsuite>
+</testsuites>
