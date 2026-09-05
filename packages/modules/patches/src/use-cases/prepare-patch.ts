@@ -6,6 +6,7 @@ import type { SourceRepository, SourceSecrets } from "../source";
 import { proposalInput, type Patch, type PatchPayload, type PatchRepository, type PatchRecord, type ChangeValue } from "../patch";
 import { PatchError } from "../patch.errors";
 import { requireSource } from "./sources";
+import { validateTextValue } from "../text-value";
 
 export async function preparePatch(input: unknown, actor: Actor, sources: SourceRepository, secrets: SourceSecrets, reader: ContentReader, patches: PatchRepository) {
   authorize(actor, "propose");
@@ -28,8 +29,7 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
       if (!field?.editable || !field.readable) throw new PatchError(400, "FIELD_NOT_EDITABLE", `Field ${name} is not editable.`);
       // Enum/relation write support is enabled only with its dedicated validation use case.
       if (field.type !== "text") throw new PatchError(400, "UNSUPPORTED_CHANGE", "Only text changes are currently enabled.");
-      if ((value === null && !field.nullable) || (value !== null && (typeof value !== "string" || value.length > field.maxLength)))
-        throw new PatchError(400, "INVALID_VALUE", `Invalid value for ${name}.`);
+      validateTextValue(value, { nullable: field.nullable, maxLength: field.maxLength }, name);
       const previous = snapshot.values[name];
       if (previous === undefined) throw new PatchError(409, "MISSING_FIELD", "The record no longer matches the schema.");
       if (previous === value) throw new PatchError(400, "NO_CHANGE", `Field ${name} is unchanged.`);

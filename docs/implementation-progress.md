@@ -9,8 +9,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 3 | #4 Content schema | Implemented; 28 focused/integration tests pass |
 | 4 | #5 Content reads | Implemented; 32 focused/integration tests pass |
 | 5 | #6 Patch persistence | Implemented; 42 focused/integration tests pass |
-| 6 | #7 Text corrections | In progress |
-| 7 | #10 Review UI | Pending |
+| 6 | #7 Text corrections | Implemented; Unicode-aware text validation |
+| 7 | #10 Review UI | In progress |
 | 8 | #11 Approval/rejection | Pending |
 | 9 | #12 Conflicts | Pending |
 | 10 | #13 Atomic apply | Pending |
