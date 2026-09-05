@@ -14,8 +14,12 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import {
+  localAgentEnv,
+  localAppPort,
+  localAppUrl,
   localDatabaseEnv,
   localDatabaseUrl,
+  localDemoServerEnv,
   resolveLocalSessionPath,
   validateLocalSession,
 } from "./patchctl-local-config.mjs";
@@ -147,6 +151,47 @@ test("local setup overrides both Prisma targets without mutating the caller", ()
   assert.equal(env.KEEP, "value");
   assert.equal(original.DATABASE_URL, "postgresql://remote/prod");
   assert.equal(original.NODE_ENV, "production");
+});
+
+test("demo server and agent environments keep compatibility narrowly scoped", () => {
+  const root = resolve("local-fixture");
+  const inherited = {
+    DATABASE_URL: "postgresql://remote/prod",
+    DIRECT_DATABASE_URL: "postgresql://remote/prod",
+    PATCHCTL_TEST_DATABASE_URL: "postgresql://remote/test",
+    JWT_SECRET: "must-not-reach-agent",
+    PATCHCTL_SOURCE_SECRETS: "must-not-reach-agent",
+    PATCHCTL_DEMO_SESSION: "must-not-reach-agent",
+    PATCHCTL_LEGACY_SERVER_CONTENT: "0",
+    PATCHCTL_HOME: "/user/config",
+    KEEP: "value",
+  };
+
+  const serverEnv = localDemoServerEnv(inherited, "/demo/session.json");
+  assert.equal(serverEnv.DATABASE_URL, localDatabaseUrl);
+  assert.equal(serverEnv.DIRECT_DATABASE_URL, localDatabaseUrl);
+  assert.equal(serverEnv.PATCHCTL_DEMO_SESSION, "/demo/session.json");
+  assert.equal(serverEnv.PATCHCTL_DEMO_PORT, String(localAppPort));
+  assert.equal(serverEnv.PATCHCTL_LEGACY_SERVER_CONTENT, "1");
+
+  const agentEnv = localAgentEnv(inherited, root, "scoped-agent-token");
+  assert.equal(agentEnv.PATCHCTL_URL, localAppUrl);
+  assert.equal(agentEnv.PATCHCTL_TOKEN, "scoped-agent-token");
+  assert.equal(
+    agentEnv.PATCHCTL_HOME,
+    resolve(root, ".patchctl-demo", "agent-cli"),
+  );
+  assert.equal(agentEnv.KEEP, "value");
+  for (const key of [
+    "DATABASE_URL",
+    "DIRECT_DATABASE_URL",
+    "PATCHCTL_TEST_DATABASE_URL",
+    "JWT_SECRET",
+    "PATCHCTL_SOURCE_SECRETS",
+    "PATCHCTL_DEMO_SESSION",
+    "PATCHCTL_LEGACY_SERVER_CONTENT",
+  ])
+    assert.equal(Object.hasOwn(agentEnv, key), false, key);
 });
 
 test("session pointer must remain in the private demo directory", () => {

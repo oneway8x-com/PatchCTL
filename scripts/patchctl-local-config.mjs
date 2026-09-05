@@ -21,6 +21,37 @@ export function localDatabaseEnv(env) {
   };
 }
 
+export function localDemoServerEnv(env, sessionPath) {
+  return {
+    ...localDatabaseEnv(env),
+    PATCHCTL_DEMO_SESSION: sessionPath,
+    PATCHCTL_DEMO_PORT: String(localAppPort),
+    // This synthetic demo intentionally exercises the legacy server-connected CLI.
+    PATCHCTL_LEGACY_SERVER_CONTENT: "1",
+  };
+}
+
+export function localAgentEnv(env, root, agentToken) {
+  const agentEnv = {
+    ...env,
+    PATCHCTL_URL: localAppUrl,
+    PATCHCTL_TOKEN: agentToken,
+    // Do not let normal local-first configuration reroute demo commands such as schema.
+    PATCHCTL_HOME: resolve(root, ".patchctl-demo", "agent-cli"),
+  };
+  for (const key of [
+    "DATABASE_URL",
+    "DIRECT_DATABASE_URL",
+    "PATCHCTL_TEST_DATABASE_URL",
+    "JWT_SECRET",
+    "PATCHCTL_SOURCE_SECRETS",
+    "PATCHCTL_DEMO_SESSION",
+    "PATCHCTL_LEGACY_SERVER_CONTENT",
+  ])
+    delete agentEnv[key];
+  return agentEnv;
+}
+
 export function resolveLocalSessionPath(root, sessionPath) {
   const directory = resolve(root, ".patchctl-demo");
   if (typeof sessionPath !== "string")

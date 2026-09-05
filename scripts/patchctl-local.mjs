@@ -4,9 +4,11 @@ import { createServer } from "node:net";
 import { resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  localAgentEnv,
   localAppPort,
   localAppUrl,
   localDatabaseEnv,
+  localDemoServerEnv,
   readLocalSession,
   resolveLocalSessionPath,
 } from "./patchctl-local-config.mjs";
@@ -171,38 +173,20 @@ async function main() {
     await startDatabase();
     printInfo(session);
     await run(process.execPath, ["scripts/patchctl-demo-server.mjs"], {
-      env: {
-        ...env,
-        PATCHCTL_DEMO_SESSION: sessionPath,
-        PATCHCTL_DEMO_PORT: String(localAppPort),
-      },
+      env: localDemoServerEnv(process.env, sessionPath),
     });
   } else if (action === "info") {
     printInfo((await readLocalSession(root)).session);
   } else if (action === "agent") {
     const { session } = await readLocalSession(root);
     // Only the scoped agent credential is forwarded, never the fixture's human token.
-    const agentEnv = {
-      ...process.env,
-      PATCHCTL_URL: localAppUrl,
-      PATCHCTL_TOKEN: session.agentToken,
-    };
-    for (const key of [
-      "DATABASE_URL",
-      "DIRECT_DATABASE_URL",
-      "PATCHCTL_TEST_DATABASE_URL",
-      "JWT_SECRET",
-      "PATCHCTL_SOURCE_SECRETS",
-      "PATCHCTL_DEMO_SESSION",
-    ])
-      delete agentEnv[key];
     await run(
       process.execPath,
       [
         "apps/cli/dist/cli.js",
         ...args.filter((arg, index) => !(index === 0 && arg === "--")),
       ],
-      { env: agentEnv },
+      { env: localAgentEnv(process.env, root, session.agentToken) },
     );
   } else if (action === "stop") {
     // Stop only this Compose database. Do not delete containers, volumes, or seeded data.
