@@ -12,8 +12,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 6 | #7 Text corrections | Implemented; Unicode-aware text validation |
 | 7 | #10 Review UI | Implemented; browser checks pass; actions follow in #11/#13 |
 | 8 | #11 Approval/rejection | Implemented; 53 focused/integration tests pass |
-| 9 | #12 Conflicts | In progress |
-| 10 | #13 Atomic apply | Pending |
+| 9 | #12 Conflicts | Implemented; real Postgres lock/race checks pass |
+| 10 | #13 Atomic apply | In progress |
 | 11 | #14 Audit | Pending |
 | 12 | #15 CLI | Pending |
 | 13 | #8 Bulk changes | Pending |
@@ -38,3 +38,4 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - Docker blocker resolved by starting the installed Docker Desktop. A dedicated test Postgres container is being provisioned on loopback port 55437.
 - #3/#4 verified against Postgres 17 in `patchctl-test-20260905`; migrations applied only to isolated `patchctl_test`. Schema checks verify the primary key, field types, Tenant column, and drift fingerprint. Patches/app typechecks pass; 28 focused/integration tests pass.
 - #10: production build passes; two Chromium checks pass for queue navigation, 50-record counts, null/empty distinction, safe HTML text rendering and pagination. Existing e2e config targets removed services; the new PatchCTL config runs against current Next.js. UI screenshot visually inspected.
+- #11/#12: four Chromium tests pass, including exact-revision approval and hiding agent controls. Focused/integration suite: 56 tests pass. Real Postgres verifies whole-record conflicts, deleted/moved records, and locks blocking concurrent updates until the final transaction releases them.

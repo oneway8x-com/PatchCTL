@@ -17,3 +17,5 @@ export * from "./patch.repository";
 export * from "./use-cases/prepare-patch";
 export * from "./use-cases/get-patch";
 export * from "./use-cases/decide-patch";
+export * from "./conflicts.postgres";
+export * from "./use-cases/check-conflicts";
