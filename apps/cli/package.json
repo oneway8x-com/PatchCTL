@@ -15,6 +15,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@corely/api-client": "workspace:*",
     "@corely/contracts": "workspace:*"
   },
   "devDependencies": {

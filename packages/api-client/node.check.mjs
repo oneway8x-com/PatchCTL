@@ -44,6 +44,7 @@ test("real HTTP blocks redirects and times out without retrying", async () => {
       getAccessToken: () => "test-only",
       timeoutMs: 2000,
     });
+    await assert.rejects(client.sources(), { code: "NETWORK_ERROR" });
     await assert.rejects(
       createPatchctlClient({
         baseUrl,
@@ -52,7 +53,6 @@ test("real HTTP blocks redirects and times out without retrying", async () => {
       }).sources(),
       { code: "NETWORK_ERROR" },
     );
-    await assert.rejects(client.sources(), { code: "NETWORK_ERROR" });
     assert.equal(requests, 2);
     assert.equal(destinationHits, 0);
   } finally {

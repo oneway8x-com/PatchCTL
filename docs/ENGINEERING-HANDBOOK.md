@@ -34,6 +34,7 @@ Run commands from the root with the Node and pnpm versions in [package.json](../
 | Public contracts         | `packages/contracts`: validated request/response schemas                |
 | Metadata persistence     | `packages/data/prisma`: schema and migrations                           |
 | Agent CLI                | `apps/cli`: read/propose terminal application                           |
+| Shared HTTP client       | `packages/api-client`: portable transport and typed PatchCTL methods    |
 | Browser verification     | `apps/e2e`: PatchCTL-specific Playwright configs                        |
 | CI                       | `.github/workflows/patchctl.yml`: checks, not deployment                |
 
@@ -121,6 +122,7 @@ pnpm --filter @corely/data exec prisma validate
 pnpm arch:check
 pnpm test
 pnpm --filter patchctl test
+pnpm --filter @corely/api-client test:node
 pnpm --filter @corely/e2e exec tsc -p tsconfig.patchctl.json
 pnpm build
 ```

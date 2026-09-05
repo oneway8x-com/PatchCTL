@@ -21,6 +21,25 @@ const config = {
 };
 
 describe("portable PatchCTL client", () => {
+  it("accepts a discovery schema with no readable fields", async () => {
+    const client = createPatchctlClient({
+      ...config,
+      fetch: async () =>
+        json({
+          definition: {
+            namespace: "public",
+            table: "articles",
+            key: "id",
+            isolation: { mode: "row", tenantColumn: "tenant_id" },
+            fields: {},
+            schedules: [],
+          },
+          version: hash,
+          versionStrategy: "postgres-xmin-and-whole-row",
+        }),
+    });
+    expect((await client.schema(sourceId)).definition.fields).toEqual({});
+  });
   it("reads the token per call and isolates concurrent client instances", async () => {
     const transport = vi.fn<typeof fetch>(async () => json([]));
     let token = "first";

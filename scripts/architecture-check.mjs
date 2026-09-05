@@ -58,7 +58,10 @@ function addViolation(filePath, message) {
 }
 
 function checkAppBoundaries() {
-  const files = [...listFiles(appSrc, [".ts", ".tsx"]), ...listFiles(appRoutes, [".ts", ".tsx"])];
+  const files = [
+    ...listFiles(appSrc, [".ts", ".tsx"]),
+    ...listFiles(appRoutes, [".ts", ".tsx"]),
+  ];
 
   for (const filePath of files) {
     const rel = path.relative(appSrc, filePath);
@@ -86,7 +89,10 @@ function checkAppBoundaries() {
         const rest = match[2];
 
         if (target !== currentModule && rest && rest !== "index") {
-          addViolation(filePath, `module-to-module deep import detected: ${spec}`);
+          addViolation(
+            filePath,
+            `module-to-module deep import detected: ${spec}`,
+          );
         }
       }
     }
@@ -101,8 +107,15 @@ function checkModulePackages() {
     const imports = extractImports(source);
 
     for (const spec of imports) {
-      if (spec.startsWith("next/") || spec.startsWith("react") || spec.startsWith("@/")) {
-        addViolation(filePath, `shared module package must stay framework-free: ${spec}`);
+      if (
+        spec.startsWith("next/") ||
+        spec.startsWith("react") ||
+        spec.startsWith("@/")
+      ) {
+        addViolation(
+          filePath,
+          `shared module package must stay framework-free: ${spec}`,
+        );
       }
     }
   }
@@ -110,6 +123,42 @@ function checkModulePackages() {
 
 checkAppBoundaries();
 checkModulePackages();
+checkPatchctlClientBoundaries();
+
+function checkPatchctlClientBoundaries() {
+  const portableRoot = path.join(repoRoot, "packages", "api-client", "src");
+  const clientRoots = [
+    portableRoot,
+    path.join(repoRoot, "apps", "cli", "src"),
+    path.join(appSrc, "modules", "patches"),
+    path.join(repoRoot, "packages", "contracts", "src", "patches"),
+  ];
+  for (const root of clientRoots) {
+    for (const file of listFiles(root, [".ts", ".tsx"])) {
+      if (file.endsWith(".test.ts")) continue;
+      for (const spec of extractImports(fs.readFileSync(file, "utf8"))) {
+        if (
+          /^@corely\/(data|modules-)/.test(spec) ||
+          spec.startsWith("@prisma/") ||
+          spec === "pg"
+        )
+          addViolation(
+            file,
+            `client/contracts must not import server code (including types): ${spec}`,
+          );
+        if (
+          root === portableRoot &&
+          (/^(node:|next(?:\/|$)|react(?:\/|$))/.test(spec) ||
+            spec.startsWith("@corely/auth-client"))
+        )
+          addViolation(
+            file,
+            `portable API client must not depend on runtime/auth adapters: ${spec}`,
+          );
+      }
+    }
+  }
+}
 
 if (violations.length > 0) {
   console.error("Architecture check failed:");

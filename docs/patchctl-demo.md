@@ -20,6 +20,7 @@ $env:DATABASE_URL=$env:PATCHCTL_TEST_DATABASE_URL
 pnpm prisma:generate
 pnpm --filter @corely/data exec prisma migrate deploy
 pnpm --filter @corely/contracts build
+pnpm --filter @corely/api-client build
 pnpm --filter patchctl build
 pnpm --filter @corely/e2e exec playwright install chromium
 pnpm exec tsx scripts/patchctl-demo.ts

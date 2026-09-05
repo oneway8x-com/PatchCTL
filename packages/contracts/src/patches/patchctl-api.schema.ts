@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { PatchContentSchemaInputSchema } from "./content-schema";
+import {
+  PatchContentSchemaInputSchema,
+  PatchIdentifierSchema,
+  PatchContentFieldSchema,
+} from "./content-schema";
 import {
   PatchProposalInputSchema,
   ContentQueryInputSchema,
@@ -34,7 +38,10 @@ export const PatchStateSchema = z.enum([
 ]);
 export const PatchSourcesSchema = z.array(z.object({ id, name: z.string() }));
 export const PatchContentSchemaResponseSchema = z.object({
-  definition: PatchContentSchemaInputSchema,
+  // Discovery is filtered to readable fields; configuration-only refinements do not apply.
+  definition: PatchContentSchemaInputSchema.innerType().extend({
+    fields: z.record(PatchIdentifierSchema, PatchContentFieldSchema),
+  }),
   version: revision,
   versionStrategy: z.literal("postgres-xmin-and-whole-row"),
 });

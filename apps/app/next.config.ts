@@ -3,7 +3,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: [
-    "@corely/api-client",
     "@corely/contracts",
     "@corely/modules-todos",
     "@corely/modules-patches",

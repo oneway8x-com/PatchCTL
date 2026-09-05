@@ -84,4 +84,5 @@ For contribution and agent workflows, start with [Contributing](CONTRIBUTING.md)
 [repository skill catalog](docs/ai/skills-management.md). PatchCTL is solo-maintained: local
 agent work can proceed autonomously, while live content patches still require human approval.
 
-See `docs/architecture/*` and `docs/guides/*` for the current architecture reference.
+See the [shared CLI/browser client architecture](docs/patchctl-client.md),
+`docs/architecture/*`, and `docs/guides/*` for the current architecture reference.

@@ -42,6 +42,8 @@ login uses the app's OTP flow, not a hardcoded token or new authentication bypas
 
 The CLI source lives in `apps/cli/src/cli.ts`; setup builds its executable at `apps/cli/dist/cli.js`.
 After changing CLI source, run `pnpm --filter patchctl build` before invoking it again.
+After changing shared contracts or API-client source, run `pnpm build:packages` first;
+both the CLI and browser consume the API client's compiled exports.
 See [CLI usage](../apps/cli/README.md) for running it without the local helper.
 
 In another terminal:

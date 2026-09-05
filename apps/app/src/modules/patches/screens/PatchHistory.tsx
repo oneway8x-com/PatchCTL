@@ -1,8 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { PatchAuditEvent } from "@corely/modules-patches";
-import { patchRequest } from "../patches-api";
+import { patchClient } from "../patches-api";
 export function PatchHistory({
   id,
   tenantId,
@@ -18,10 +17,7 @@ export function PatchHistory({
   const cursor = cursors.at(-1);
   const query = useQuery({
     queryKey: ["patch-history", tenantId, actorId, id, state, cursor],
-    queryFn: () =>
-      patchRequest<{ events: PatchAuditEvent[]; nextCursor: string | null }>(
-        `/patches/${id}/history${cursor ? `?after=${encodeURIComponent(cursor)}` : ""}`,
-      ),
+    queryFn: () => patchClient.history(id, cursor ? { after: cursor } : {}),
     retry: false,
   });
   return (

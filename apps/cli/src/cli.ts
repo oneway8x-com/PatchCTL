@@ -5,6 +5,10 @@ import {
   PatchProposalInputSchema,
   ContentQueryInputSchema,
 } from "@corely/contracts";
+import {
+  createPatchctlClient,
+  PatchctlClientError,
+} from "@corely/api-client/patchctl";
 
 const help = `patchctl — prepare content changes for human review
 
@@ -193,97 +197,66 @@ export async function run(
         3,
         "AUTH_CONFIGURATION",
       );
-    const base = new URL(env.PATCHCTL_URL);
-    if (
-      (base.protocol !== "https:" &&
-        !(
-          base.protocol === "http:" &&
-          ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)
-        )) ||
-      base.username ||
-      base.password ||
-      base.pathname !== "/" ||
-      base.search ||
-      base.hash
-    )
-      throw new CliError(
-        "PATCHCTL_URL must be an HTTPS origin (HTTP is allowed on loopback for development).",
-      );
-    let path = "/sources",
-      method = "GET";
-    if (command === "schema")
-      path = `/sources/${encodeURIComponent(id)}/schema`;
-    if (command === "targets")
-      path = `/sources/${encodeURIComponent(id)}/relations/${encodeURIComponent(field)}${options.after ? `?after=${encodeURIComponent(options.after)}` : ""}`;
-    if (command === "read") {
-      path = `/sources/${encodeURIComponent(id)}/records/query`;
-      method = "POST";
-    }
-    if (command === "propose") {
-      path = "/patches";
-      method = "POST";
-    }
-    if (command === "status") path = `/patches/${encodeURIComponent(id)}`;
-    if (command === "history")
-      path = `/patches/${encodeURIComponent(id)}/history${options.after ? `?after=${encodeURIComponent(options.after)}` : ""}`;
-    let response;
-    try {
-      response = await fetchImpl(new URL(`/api/patchctl${path}`, base), {
-        method,
-        redirect: "error",
-        headers: {
-          Authorization: `Bearer ${env.PATCHCTL_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        signal: AbortSignal.timeout(30000),
-      });
-    } catch {
-      throw new CliError(
-        "API request failed or timed out. No automatic retry was attempted.",
-        5,
-        "NETWORK_ERROR",
-      );
-    }
-    const result: unknown = await response.json().catch(() => {
-      throw new CliError("API returned invalid JSON.", 5, "INVALID_RESPONSE");
+    const client = createPatchctlClient({
+      baseUrl: env.PATCHCTL_URL,
+      getAccessToken: () => env.PATCHCTL_TOKEN,
+      fetch: fetchImpl,
     });
-    if (!response.ok)
-      throw new CliError(
-        isRecord(result) && typeof result.detail === "string"
-          ? result.detail
-          : `API returned HTTP ${response.status}.`,
-        response.status === 401 || response.status === 403
-          ? 3
-          : response.status === 409
-            ? 4
-            : 5,
-        isRecord(result) && typeof result.code === "string"
-          ? result.code
-          : "API_ERROR",
-      );
-    if (
-      command === "propose" &&
-      isRecord(result) &&
-      typeof result.reviewPath === "string" &&
-      result.reviewPath
-    )
-      result.reviewUrl = new URL(result.reviewPath, base).href;
+    let result: unknown;
+    switch (command) {
+      case "sources":
+        result = await client.sources();
+        break;
+      case "schema":
+        result = await client.schema(id);
+        break;
+      case "targets":
+        result = await client.targets(id, field, options.after);
+        break;
+      case "read":
+        result = await client.read(id, ContentQueryInputSchema.parse(body));
+        break;
+      case "propose":
+        result = await client.propose(PatchProposalInputSchema.parse(body));
+        break;
+      case "status":
+        result = await client.patch(id);
+        break;
+      case "history":
+        result = await client.history(id, { after: options.after });
+        break;
+    }
     stdout.write(JSON.stringify(result) + "\n");
     return 0;
   } catch (error) {
-    const known = error instanceof CliError;
+    const failure =
+      error instanceof PatchctlClientError
+        ? new CliError(
+            error.message,
+            error.status === 401 ||
+              error.status === 403 ||
+              error.code === "AUTH_CONFIGURATION"
+              ? 3
+              : error.status === 409
+                ? 4
+                : error.code === "INVALID_INPUT"
+                  ? 2
+                  : 5,
+            error.code,
+          )
+        : error;
+    const known = failure instanceof CliError;
     stderr.write(
       JSON.stringify({
         error: {
-          code: known ? error.code : "INPUT_ERROR",
+          code: known ? failure.code : "INPUT_ERROR",
           message: known
-            ? error.message
+            ? failure.message
             : "Could not read input or configuration.",
         },
       }) + "\n",
     );
-    return known ? error.exitCode : 2;
+    return known ? failure.exitCode : 2;
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

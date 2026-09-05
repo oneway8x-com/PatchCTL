@@ -2,7 +2,7 @@ import { z } from "zod";
 export const PatchIdentifierSchema = z
   .string()
   .regex(/^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/);
-const field = z
+export const PatchContentFieldSchema = z
   .object({
     type: z.enum(["text", "enum", "relation", "timestamp"]),
     readable: z.boolean(),
@@ -43,7 +43,7 @@ export const PatchContentSchemaInputSchema = z
         .strict(),
     ]),
     fields: z
-      .record(PatchIdentifierSchema, field)
+      .record(PatchIdentifierSchema, PatchContentFieldSchema)
       .refine(
         (v) => Object.keys(v).length > 0 && Object.keys(v).length <= 50,
         "Declare 1 to 50 fields",

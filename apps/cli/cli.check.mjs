@@ -14,7 +14,7 @@ const proposal = {
 async function invoke(
   args,
   input = "",
-  response = { ok: true, json: async () => ({}) },
+  response,
   env = {
     PATCHCTL_URL: "https://example.test",
     PATCHCTL_TOKEN: "private-token",
@@ -39,7 +39,19 @@ async function invoke(
     fetchImpl: async (...args) => {
       calls.push(args);
       if (response instanceof Error) throw response;
-      return response;
+      if (response instanceof Response) return response;
+      const fallback = args[0].endsWith("/records/query")
+        ? { records: [], nextCursor: null, schemaVersion: "a".repeat(64) }
+        : args[0].includes("/relations/")
+          ? { targets: [], nextCursor: null }
+          : [];
+      return new Response(
+        JSON.stringify(response ? await response.json() : fallback),
+        {
+          status: response?.status ?? 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     },
   });
   return { code, stdout, stderr, calls };
@@ -80,6 +92,7 @@ test("submission returns review URL and sends credentials only in the authorizat
       ok: true,
       json: async () => ({
         id: "patch",
+        revision: "a".repeat(64),
         affectedRecords: 1,
         state: "pending",
         reviewPath: "/patches/patch",
@@ -95,7 +108,7 @@ test("submission returns review URL and sends credentials only in the authorizat
     result.calls[0][1].headers.Authorization,
     "Bearer private-token",
   );
-  assert.equal(result.calls[0][0].pathname, "/api/patchctl/patches");
+  assert.equal(new URL(result.calls[0][0]).pathname, "/api/patchctl/patches");
   assert.ok(!result.stdout.includes("private-token"));
 });
 test("read preserves pagination/filter inputs and uses only the read endpoint", async () => {
@@ -110,7 +123,7 @@ test("read preserves pagination/filter inputs and uses only the read endpoint", 
     limit: 50,
   });
   assert.equal(
-    result.calls[0][0].pathname,
+    new URL(result.calls[0][0]).pathname,
     "/api/patchctl/sources/source/records/query",
   );
 });
@@ -173,10 +186,10 @@ test("discovers relation targets without write requests and preserves pagination
   ]);
   assert.equal(result.code, 0);
   assert.equal(
-    result.calls[0][0].pathname,
+    new URL(result.calls[0][0]).pathname,
     "/api/patchctl/sources/source/relations/category_id",
   );
-  assert.equal(result.calls[0][0].searchParams.get("after"), "cat-1");
+  assert.equal(new URL(result.calls[0][0]).searchParams.get("after"), "cat-1");
   assert.equal(result.calls[0][1].method, "GET");
 });
 test("does not retry network errors or print secret-bearing exception text", async () => {
@@ -188,6 +201,18 @@ test("does not retry network errors or print secret-bearing exception text", asy
   assert.equal(result.code, 5);
   assert.equal(result.calls.length, 1);
   assert.ok(!result.stderr.includes("private-token"));
+});
+
+test("maps invalid JSON and response contracts to exit 5 without retry", async () => {
+  for (const response of [
+    new Response("not-json"),
+    new Response(JSON.stringify({ unexpected: true })),
+  ]) {
+    const result = await invoke(["sources"], "", response);
+    assert.equal(result.code, 5);
+    assert.equal(JSON.parse(result.stderr).error.code, "INVALID_RESPONSE");
+    assert.equal(result.calls.length, 1);
+  }
 });
 test("offers no agent approval/apply override", async () => {
   for (const command of ["approve", "apply", "sql", "delete"]) {

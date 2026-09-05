@@ -274,6 +274,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@corely/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@corely/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
