@@ -17,12 +17,7 @@ test("real CLI → ten English summaries → browser approval → Postgres; reje
       const child = spawn(
         process.execPath,
         [
-          fileURLToPath(
-            new URL(
-              "../../../../packages/patchctl-cli/cli.mjs",
-              import.meta.url,
-            ),
-          ),
+          fileURLToPath(new URL("../../../cli/dist/cli.js", import.meta.url)),
           ...args,
         ],
         {

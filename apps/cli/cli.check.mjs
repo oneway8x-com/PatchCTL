@@ -4,7 +4,7 @@ import { Readable } from "node:stream";
 import { mkdtemp, writeFile, unlink, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { run } from "./cli.mjs";
+import { run } from "./dist/cli.js";
 const proposal = {
   sourceId: "e1bf2bb3-d983-4a69-b387-1f93124c1a24",
   schemaVersion: "a".repeat(64),
@@ -135,6 +135,32 @@ test("reports authentication and conflict exit codes", async () => {
     ).code,
     4,
   );
+});
+
+test("rejects non-object read input before any request", async () => {
+  for (const input of [null, [], "text", 1]) {
+    const result = await invoke(
+      ["read", "source", "--stdin"],
+      JSON.stringify(input),
+    );
+    assert.equal(result.code, 2);
+    assert.equal(JSON.parse(result.stderr).error.code, "INVALID_INPUT");
+    assert.equal(result.calls.length, 0);
+  }
+});
+
+test("narrows unknown API error bodies without changing HTTP exit codes", async () => {
+  for (const body of [null, [], { detail: 123, code: false }]) {
+    const result = await invoke(["sources"], "", {
+      ok: false,
+      status: 403,
+      json: async () => body,
+    });
+    assert.equal(result.code, 3);
+    assert.deepEqual(JSON.parse(result.stderr), {
+      error: { code: "API_ERROR", message: "API returned HTTP 403." },
+    });
+  }
 });
 
 test("discovers relation targets without write requests and preserves pagination", async () => {

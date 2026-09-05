@@ -4,15 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "patchctl": "./cli.mjs"
+    "patchctl": "./dist/cli.js"
   },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test cli.check.mjs",
-    "build": "node --check cli.mjs",
-    "typecheck": "tsc -p tsconfig.json"
+    "test": "pnpm run build && node --test cli.check.mjs",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@corely/contracts": "workspace:*"

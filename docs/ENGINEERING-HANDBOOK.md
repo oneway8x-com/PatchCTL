@@ -33,7 +33,7 @@ Run commands from the root with the Node and pnpm versions in [package.json](../
 | Simple-feature reference | `packages/modules/todos/src`: colocated types, repository, use cases    |
 | Public contracts         | `packages/contracts`: validated request/response schemas                |
 | Metadata persistence     | `packages/data/prisma`: schema and migrations                           |
-| Agent CLI                | `packages/patchctl-cli`: read/propose interface                         |
+| Agent CLI                | `apps/cli`: read/propose terminal application                           |
 | Browser verification     | `apps/e2e`: PatchCTL-specific Playwright configs                        |
 | CI                       | `.github/workflows/patchctl.yml`: checks, not deployment                |
 

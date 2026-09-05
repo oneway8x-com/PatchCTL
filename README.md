@@ -5,6 +5,7 @@ CorelyBase is now a **Next.js-first modular monolith**.
 The active architecture is:
 
 - `apps/app` for pages and synchronous API route handlers
+- `apps/cli` for the `patchctl` terminal application ([CLI usage](apps/cli/README.md))
 - `packages/modules/*` for business logic
 - `packages/contracts` for shared request/response schemas
 - `packages/data/prisma` for schema and migrations
@@ -62,6 +63,7 @@ pnpm prisma:studio
 ## Active paths
 
 - app runtime: `apps/app`
+- CLI source: `apps/cli/src/cli.ts`; compiled entrypoint: `apps/cli/dist/cli.js`
 - route handlers: `apps/app/app/api`
 - UI modules: `apps/app/src/modules`
 - storage runtime: `apps/app/src/server/object-storage.ts`

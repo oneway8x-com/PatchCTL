@@ -24,15 +24,39 @@ Set PATCHCTL_URL to the service origin and PATCHCTL_TOKEN to a scoped agent key.
 Source content changes only after human review in the returned review URL.
 `;
 class CliError extends Error {
-  constructor(message, exitCode = 2, code = "INVALID_INPUT") {
+  constructor(
+    message: string,
+    public readonly exitCode = 2,
+    public readonly code = "INVALID_INPUT",
+  ) {
     super(message);
-    this.exitCode = exitCode;
-    this.code = code;
   }
 }
-function parse(args) {
-  const positionals = [],
-    options = {};
+type Options = {
+  json?: boolean;
+  stdin?: boolean;
+  help?: boolean;
+  file?: string;
+  after?: string;
+  limit?: string;
+};
+type InputStream = AsyncIterable<string | Uint8Array>;
+type OutputStream = { write(text: string): unknown };
+type RunOptions = {
+  env?: NodeJS.ProcessEnv;
+  stdin?: InputStream;
+  stdout?: OutputStream;
+  stderr?: OutputStream;
+  fetchImpl?: typeof fetch;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parse(args: string[]) {
+  const positionals: string[] = [];
+  const options: Options = {};
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (!arg.startsWith("--")) {
@@ -40,12 +64,12 @@ function parse(args) {
       continue;
     }
     const key = arg.slice(2);
-    if (["json", "stdin", "help"].includes(key)) {
+    if (key === "json" || key === "stdin" || key === "help") {
       options[key] = true;
       continue;
     }
     if (
-      !["file", "after", "limit"].includes(key) ||
+      (key !== "file" && key !== "after" && key !== "limit") ||
       !args[i + 1] ||
       args[i + 1].startsWith("--")
     )
@@ -57,7 +81,10 @@ function parse(args) {
     throw new CliError("Use --file or --stdin, not both.");
   return { positionals, options };
 }
-async function inputJSON(options, stdin) {
+async function inputJSON(
+  options: Options,
+  stdin: InputStream,
+): Promise<unknown> {
   let text = "";
   if (options.file) {
     if ((await stat(options.file)).size > 2_000_000)
@@ -65,9 +92,9 @@ async function inputJSON(options, stdin) {
     text = await readFile(options.file, "utf8");
   } else if (options.stdin) {
     let bytes = 0;
-    const chunks = [];
+    const chunks: Uint8Array[] = [];
     for await (const chunk of stdin) {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const buffer = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
       bytes += buffer.length;
       if (bytes > 2_000_000) throw new CliError("Input exceeds 2 MB.");
       chunks.push(buffer);
@@ -81,15 +108,15 @@ async function inputJSON(options, stdin) {
   }
 }
 export async function run(
-  args,
+  args: string[],
   {
     env = process.env,
     stdin = process.stdin,
     stdout = process.stdout,
     stderr = process.stderr,
     fetchImpl = fetch,
-  } = {},
-) {
+  }: RunOptions = {},
+): Promise<number> {
   try {
     const { positionals, options } = parse(args);
     const [command, id, field] = positionals;
@@ -128,15 +155,17 @@ export async function run(
       throw new CliError(
         "Pagination options are not supported for this command.",
       );
-    let body;
+    let body: unknown;
     if (["validate", "propose", "read"].includes(command)) {
       if (command !== "read" && !options.file && !options.stdin)
         throw new CliError("Provide a proposal with --file or --stdin.");
       body = await inputJSON(options, stdin);
+      if (command === "read" && !isRecord(body))
+        throw new CliError("Read query must be a JSON object.");
       const parsed =
         command === "read"
           ? ContentQueryInputSchema.safeParse({
-              ...body,
+              ...(isRecord(body) ? body : {}),
               ...(options.after ? { after: options.after } : {}),
               ...(options.limit ? { limit: Number(options.limit) } : {}),
             })
@@ -216,20 +245,29 @@ export async function run(
         "NETWORK_ERROR",
       );
     }
-    const result = await response.json().catch(() => {
+    const result: unknown = await response.json().catch(() => {
       throw new CliError("API returned invalid JSON.", 5, "INVALID_RESPONSE");
     });
     if (!response.ok)
       throw new CliError(
-        result.detail ?? `API returned HTTP ${response.status}.`,
+        isRecord(result) && typeof result.detail === "string"
+          ? result.detail
+          : `API returned HTTP ${response.status}.`,
         response.status === 401 || response.status === 403
           ? 3
           : response.status === 409
             ? 4
             : 5,
-        result.code ?? "API_ERROR",
+        isRecord(result) && typeof result.code === "string"
+          ? result.code
+          : "API_ERROR",
       );
-    if (command === "propose" && result.reviewPath)
+    if (
+      command === "propose" &&
+      isRecord(result) &&
+      typeof result.reviewPath === "string" &&
+      result.reviewPath
+    )
       result.reviewUrl = new URL(result.reviewPath, base).href;
     stdout.write(JSON.stringify(result) + "\n");
     return 0;

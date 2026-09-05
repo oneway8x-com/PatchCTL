@@ -1,6 +1,19 @@
 # patchctl
 
-From the repository root, run `pnpm install`, `pnpm --filter @corely/contracts build`, then `node packages/patchctl-cli/cli.mjs --help`. The package declares the `patchctl` executable for package-manager linking; no global installation is required for the demo.
+From the repository root:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm --filter @corely/contracts build
+pnpm --filter patchctl build
+node apps/cli/dist/cli.js --help
+```
+
+The strict TypeScript source is `src/cli.ts`; `tsc` emits the Node.js executable to `dist/cli.js`. Generated output is ignored by Git. Rebuild after source changes. The package declares the `patchctl` executable for package-manager linking; no global installation is required for the demo.
+
+The CLI is a runnable application under `apps/cli`, separate from the Next.js review UI and HTTP API in `apps/app`. It depends on shared contracts, not server-side use cases or database adapters. Its package name remains `patchctl`, so `pnpm --filter patchctl test`, `typecheck`, and `build` still select it. The local `pnpm local:agent` helper invokes this entrypoint with the scoped demo credential.
+
+The CLI currently uses native `fetch` with no automatic retries, redirects blocked, a timeout, and injectable transport for tests. The existing `@corely/api-client` needs Node-compatible build output and equivalent transport options before reuse. `@corely/auth-client` manages human login and refresh-token storage; scoped agent keys do not use that flow.
 
 Set `PATCHCTL_URL` to the service origin and `PATCHCTL_TOKEN` to a scoped agent key. Do not pass secrets in command arguments or commit them. The CLI does not receive Postgres credentials and has no approve/apply command.
 

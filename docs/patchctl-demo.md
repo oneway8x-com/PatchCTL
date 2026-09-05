@@ -20,6 +20,7 @@ $env:DATABASE_URL=$env:PATCHCTL_TEST_DATABASE_URL
 pnpm prisma:generate
 pnpm --filter @corely/data exec prisma migrate deploy
 pnpm --filter @corely/contracts build
+pnpm --filter patchctl build
 pnpm --filter @corely/e2e exec playwright install chromium
 pnpm exec tsx scripts/patchctl-demo.ts
 ```
@@ -52,11 +53,11 @@ In another local terminal, read the session without printing it:
 $demoSession=Get-Content -LiteralPath $env:PATCHCTL_DEMO_SESSION -Raw | ConvertFrom-Json
 $env:PATCHCTL_URL='http://127.0.0.1:3108'
 $env:PATCHCTL_TOKEN=$demoSession.agentToken
-node packages/patchctl-cli/cli.mjs schema $demoSession.sourceId
-'{"filters":[{"field":"summary_en","op":"missing"}]}' | node packages/patchctl-cli/cli.mjs read $demoSession.sourceId --stdin
+node apps/cli/dist/cli.js schema $demoSession.sourceId
+'{"filters":[{"field":"summary_en","op":"missing"}]}' | node apps/cli/dist/cli.js read $demoSession.sourceId --stdin
 ```
 
-Give the agent the prompt above and only the scoped agent environment, never `session.json` or the human credential. Ask it to read the source bodies, produce a proposal file with `mode: "fill-missing"`, the returned `schemaVersion`, and each record's `id`, `version`, and `changes.summary_en`. Then run `node packages/patchctl-cli/cli.mjs validate --file proposal.json` and `node packages/patchctl-cli/cli.mjs propose --file proposal.json`. Follow the returned review URL.
+Give the agent the prompt above and only the scoped agent environment, never `session.json` or the human credential. Ask it to read the source bodies, produce a proposal file with `mode: "fill-missing"`, the returned `schemaVersion`, and each record's `id`, `version`, and `changes.summary_en`. Then run `node apps/cli/dist/cli.js validate --file proposal.json` and `node apps/cli/dist/cli.js propose --file proposal.json`. Follow the returned review URL.
 
 For this isolated fixture only, a local human can place the session's `humanToken` in the browser's `accessToken` localStorage key at `http://127.0.0.1:3108`, then reload. The automated test performs that step without exposing credentials. Production uses normal sign-in; do not add a demo-login endpoint or share this credential with an agent. Inspect all ten changes and click **Approve and apply**. The CLI `status` and `history` commands show the result.
 
