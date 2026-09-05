@@ -1,0 +1,22 @@
+# Isolated local demo only. These public development credentials are not for deployment.
+# Separate project/volume from the legacy docker-compose.local.yml and other repositories.
+name: patchctl-local
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: patchctl_demo
+      POSTGRES_USER: patchctl_local
+      POSTGRES_PASSWORD: patchctl_local_only
+    ports:
+      - "127.0.0.1:55438:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U patchctl_local -d patchctl_demo"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  postgres_data:

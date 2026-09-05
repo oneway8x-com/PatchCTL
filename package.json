@@ -9,6 +9,12 @@
     "node": ">=22.19.0"
   },
   "scripts": {
+    "local:setup": "node scripts/patchctl-local.mjs setup",
+    "local:start": "node scripts/patchctl-local.mjs start",
+    "local:info": "node scripts/patchctl-local.mjs info",
+    "local:agent": "node scripts/patchctl-local.mjs agent",
+    "local:stop": "node scripts/patchctl-local.mjs stop",
+    "local:test": "node --test scripts/patchctl-local.test.mjs",
     "prepare": "husky",
     "dev": "pnpm --filter @corely/app dev",
     "build": "pnpm build:packages && pnpm --filter patchctl build && pnpm --filter @corely/app build",

@@ -6,6 +6,10 @@ This demo uses real HTTP, CLI, browser review and Postgres. The automated run us
 
 ## Local setup
 
+For the repeatable interactive setup, use [Local development with Docker](local-development.md).
+It uses a separate persistent database on port 55438 and app port 3109. The commands below remain
+the disposable automated-test/manual fixture workflow on app port 3108.
+
 Prerequisites: Node 22, pnpm, Docker and Playwright Chromium. Use a dedicated, disposable loopback database; never point this fixture at production. In PowerShell, from the repository root:
 
 ```powershell

@@ -18,6 +18,10 @@ The active architecture is:
 
 ## Setup
 
+For a ready-to-run PatchCTL environment with isolated Docker Postgres and English-summary demo
+data, follow [Local development](docs/local-development.md): `pnpm install --frozen-lockfile`,
+`pnpm local:setup`, then `pnpm local:start`. The app runs at `http://127.0.0.1:3109/patches`.
+
 ```bash
 pnpm install
 pnpm prisma:generate

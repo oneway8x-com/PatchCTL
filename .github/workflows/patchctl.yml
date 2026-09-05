@@ -41,6 +41,7 @@ jobs:
       - run: pnpm arch:check
       - run: pnpm test
       - run: pnpm --filter patchctl test
+      - run: pnpm local:test
       - run: pnpm --filter @corely/e2e exec playwright install --with-deps chromium
       - run: pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl.config.ts
       - name: Seed isolated full-stack demo without exposing credentials

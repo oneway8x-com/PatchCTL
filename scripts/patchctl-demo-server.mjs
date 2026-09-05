@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
+const port = process.env.PATCHCTL_DEMO_PORT ?? "3108";
+if (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535)
+  throw new Error(
+    "PATCHCTL_DEMO_PORT must be an unprivileged TCP port (1024-65535).",
+  );
 const session = JSON.parse(
   await readFile(process.env.PATCHCTL_DEMO_SESSION, "utf8"),
 );
@@ -15,7 +20,7 @@ const child = spawn(
     "--hostname",
     "127.0.0.1",
     "--port",
-    "3108",
+    port,
   ],
   {
     cwd: new URL("../apps/app", import.meta.url),
