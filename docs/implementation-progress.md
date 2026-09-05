@@ -50,7 +50,7 @@ Work was performed sequentially on local `main`, following issue #1, with per-fe
 
 - 163 repository unit/integration tests pass, including 103 PatchCTL tests against isolated Postgres.
 - 9 CLI checks and 7 Chromium tests pass (6 focused review screens plus the full-stack CLI/browser/Postgres scenario).
-- Root and browser-suite typechecks, Prisma validation, architecture checks and formatting of the new feature files pass. Final production-build result is recorded below when complete.
+- Root and browser-suite typechecks, Prisma validation, architecture checks, formatting of the new feature files and the final production build all pass.
 - Browser fallback for GitHub Project 7 returned a GitHub 404 under the available browser session. Both available board-access paths were checked; issue comments remain available through the CLI.
 - No production content was changed. Dedicated local Postgres `patchctl-test-20260905` remains on loopback port 55437 for review/reseeding; test web servers have stopped. Demo credentials are in ignored `.patchctl-demo` session files and expire after one hour.
 - Main changed areas: `packages/modules/patches`, `packages/patchctl-cli`, shared patch contracts, Next.js PatchCTL routes/review screens, metadata migrations, isolated demo/Playwright tests, CI and operator documentation. Existing Todo edits are limited to three test query defaults; the architecture checker received a Windows-safe path fix.
