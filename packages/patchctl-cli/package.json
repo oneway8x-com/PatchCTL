@@ -1,0 +1,11 @@
+{
+  "name": "patchctl",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "patchctl": "./cli.mjs" },
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test cli.check.mjs", "build": "node --check cli.mjs", "typecheck": "tsc -p tsconfig.json" },
+  "dependencies": { "@corely/contracts": "workspace:*" },
+  "devDependencies": { "@types/node": "catalog:", "typescript": "catalog:" }
+}

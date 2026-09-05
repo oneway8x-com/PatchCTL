@@ -1,11 +1,5 @@
-import { z } from "zod";
 import type { Actor } from "./access";
-export const proposalInput = z.object({ sourceId: z.string().uuid(), schemaVersion: z.string().regex(/^[a-f0-9]{64}$/),
-  reason: z.string().trim().min(1).max(1000), agentRunLabel: z.string().max(120).optional(),
-  records: z.array(z.object({ id: z.string().min(1).max(500), version: z.string().regex(/^[a-f0-9]{32}$/),
-    changes: z.record(z.union([z.string().max(100000), z.number().finite(), z.null()])).refine(x => Object.keys(x).length > 0 && Object.keys(x).length <= 50),
-  }).strict()).min(1).max(100),
-}).strict();
+export { PatchProposalInputSchema as proposalInput } from "@corely/contracts";
 export type ChangeValue = string | number | null;
 export type PatchRecord = { id: string; version: string; before: Record<string, ChangeValue>; after: Record<string, ChangeValue> };
 export type PatchPayload = { sourceId: string; schemaVersion: string; sourceFingerprint: string; reason: string; agentRunLabel?: string;

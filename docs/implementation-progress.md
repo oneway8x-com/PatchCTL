@@ -15,8 +15,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 9 | #12 Conflicts | Implemented; real Postgres lock/race checks pass |
 | 10 | #13 Atomic apply | Implemented; rollback/idempotency/recovery tests pass |
 | 11 | #14 Audit | Implemented; real persistence/audit tests pass |
-| 12 | #15 CLI | In progress |
-| 13 | #8 Bulk changes | Pending |
+| 12 | #15 CLI | Implemented; 8 CLI checks pass |
+| 13 | #8 Bulk changes | In progress |
 | 14 | #9 Missing content/translations | Pending |
 | 15 | #17 English-summary demo | Pending |
 | 16 | #16 Enum/relation assignment | Pending |

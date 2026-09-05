@@ -435,6 +435,9 @@ importers:
 
   packages/modules/patches:
     dependencies:
+      '@corely/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
       '@prisma/client':
         specifier: 'catalog:'
         version: 7.4.1(prisma@7.4.1(@types/react@18.3.28)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(typescript@5.9.3)
@@ -479,6 +482,19 @@ importers:
       '@prisma/client':
         specifier: 'catalog:'
         version: 7.4.1(prisma@7.4.1(@types/react@18.3.28)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(typescript@5.9.3)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.11
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/patchctl-cli:
+    dependencies:
+      '@corely/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.11
