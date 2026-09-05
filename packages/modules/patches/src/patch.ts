@@ -18,3 +18,6 @@ export interface PatchRepository {
   find(tenantId: string, id: string): Promise<Patch | null>;
   list(tenantId: string, connectionIds: string[] | null, after: string | undefined, limit: number): Promise<Patch[]>;
 }
+export interface PatchDecisionRepository extends PatchRepository {
+  decide(tenantId: string, id: string, revision: string, reviewerId: string, decision: "approved" | "rejected", reason: string | null): Promise<boolean>;
+}

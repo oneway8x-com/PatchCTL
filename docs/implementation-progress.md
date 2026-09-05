@@ -11,8 +11,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 5 | #6 Patch persistence | Implemented; 42 focused/integration tests pass |
 | 6 | #7 Text corrections | Implemented; Unicode-aware text validation |
 | 7 | #10 Review UI | Implemented; browser checks pass; actions follow in #11/#13 |
-| 8 | #11 Approval/rejection | In progress |
-| 9 | #12 Conflicts | Pending |
+| 8 | #11 Approval/rejection | Implemented; 53 focused/integration tests pass |
+| 9 | #12 Conflicts | In progress |
 | 10 | #13 Atomic apply | Pending |
 | 11 | #14 Audit | Pending |
 | 12 | #15 CLI | Pending |

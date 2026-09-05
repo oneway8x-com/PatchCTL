@@ -16,3 +16,4 @@ export * from "./patch";
 export * from "./patch.repository";
 export * from "./use-cases/prepare-patch";
 export * from "./use-cases/get-patch";
+export * from "./use-cases/decide-patch";

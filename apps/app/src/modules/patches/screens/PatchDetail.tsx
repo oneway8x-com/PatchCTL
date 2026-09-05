@@ -13,6 +13,9 @@ function Value({ value }: { value: unknown }) {
 export function PatchDetail({ id }: { id: string }) {
   const auth = useAuth();
   const [page, setPage] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const scope = [auth.user?.userId, auth.user?.activeTenantId];
   const query = useQuery({ queryKey: ["patch", ...scope, id], queryFn: () => fetchPatch(id), enabled: !auth.isLoading && auth.isAuthenticated, retry: false });
   const actorQuery = useQuery({ queryKey: ["patch-actor", ...scope], queryFn: fetchActor, enabled: !auth.isLoading && auth.isAuthenticated, retry: false });
@@ -24,6 +27,13 @@ export function PatchDetail({ id }: { id: string }) {
   if (!query.data || query.isError) return <div role="alert">This patch is unavailable. Check your access. <button className="underline" onClick={() => void query.refetch()}>Retry</button></div>;
   const patch = query.data;
   const count = patch.payload.records.length;
+  async function decide(decision: "approved" | "rejected") {
+    setBusy(true); setActionError(null);
+    try {
+      await patchRequest(`/patches/${id}/decision`, "POST", { revision: patch.revision, decision, ...(decision === "rejected" ? { reason: rejectionReason } : {}) });
+    } catch { setActionError("The decision could not be saved. The patch may have changed or your access may have expired. Review its current state before retrying."); }
+    finally { await query.refetch(); setBusy(false); }
+  }
   return <section className="mx-auto max-w-6xl space-y-6">
     <Link className="text-sm underline" href="/patches">← All patches</Link>
     <header className="space-y-3"><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">Review content changes</h1><span className="rounded-full bg-muted px-3 py-1" data-testid="patch-state">{patch.state}</span></div>
@@ -36,6 +46,12 @@ export function PatchDetail({ id }: { id: string }) {
     {patch.failureCode && <p role="alert">Apply result: {patch.failureCode}</p>}
     {patch.reviewerId && <p>Reviewed by {patch.reviewerId} · {patch.reviewedAt ? new Date(patch.reviewedAt).toLocaleString() : ""}{patch.rejectionReason ? ` · ${patch.rejectionReason}` : ""}</p>}
     {patch.appliedAt && <p>Applied {new Date(patch.appliedAt).toLocaleString()}</p>}
+    {actionError && <p role="alert">{actionError}</p>}
+    {patch.state === "pending" && actorQuery.data?.kind === "human" && actorQuery.data.permissions.includes("review") && <div className="space-y-3 rounded-xl border p-4">
+      <label className="block text-sm">Rejection reason (optional)<input className="mt-1 block w-full rounded border bg-background p-2" value={rejectionReason} maxLength={1000} onChange={event => setRejectionReason(event.target.value)}/></label>
+      <div className="flex gap-3"><button className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-40" disabled={busy} onClick={() => void decide("approved")}>Approve patch</button>
+        <button className="rounded border px-4 py-2 disabled:opacity-40" disabled={busy} onClick={() => void decide("rejected")}>Reject patch</button></div>
+    </div>}
     <div className="space-y-5">{patch.payload.records.slice(page * 10, page * 10 + 10).map(record => <article key={record.id} className="overflow-hidden rounded-xl border" data-testid="record-diff">
       <h2 className="border-b bg-muted/50 p-4 font-semibold">Record {record.id}</h2>
       {Object.keys(record.after).map(field => <div key={field} className="border-b last:border-0">
