@@ -2,7 +2,7 @@ import { sourcePool } from "./postgres";
 import { fingerprint, quoteIdentifier as q, tableName, type ContentSchema, type RegisteredSchema } from "./content-schema";
 import { inspectSchema } from "./schema.postgres";
 import { PatchError } from "./patch.errors";
-import type { ContentReader, ContentQuery, ContentPage } from "./content";
+import type { ContentReader, ContentQuery, ContentPage, ContentRecord } from "./content";
 import type { PoolClient } from "pg";
 
 export function rowProjection(schema: ContentSchema, fields: string[]) {
@@ -22,7 +22,30 @@ export async function assertSchema(client: PoolClient, registered: RegisteredSch
   const observed = await inspectSchema(client, registered.definition);
   if (observed !== registered.databaseFingerprint) throw new PatchError(409, "SCHEMA_CHANGED", "The content schema changed; configure it again before preparing a patch.");
 }
+export async function readSnapshots(client: PoolClient, registered: RegisteredSchema, tenantId: string, ids: string[], lock = false): Promise<ContentRecord[]> {
+  const schema = registered.definition;
+  const fields = Object.keys(schema.fields).filter(key => schema.fields[key]?.readable);
+  const values: unknown[] = [];
+  const scope = rowScope(schema, tenantId, values);
+  values.push(ids);
+  const result = await client.query(`SELECT ${rowProjection(schema, fields)} FROM ${tableName(schema)} r
+    WHERE ${scope} AND r.${q(schema.key)}::text = ANY($${values.length}::text[])
+    ORDER BY r.${q(schema.key)}::text COLLATE "C" ${lock ? "FOR UPDATE" : ""}`, values);
+  return result.rows;
+}
 export class PostgresContentReader implements ContentReader {
+  async snapshots(url: string, schema: RegisteredSchema, tenantId: string, ids: string[]) {
+    const pool = sourcePool(url);
+    const client = await pool.connect().catch(async error => { await pool.end(); throw error; });
+    try {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      await assertSchema(client, schema);
+      const rows = await readSnapshots(client, schema, tenantId, ids);
+      await client.query("COMMIT");
+      return rows;
+    } catch (error) { await client.query("ROLLBACK").catch(() => {}); throw error; }
+    finally { client.release(); await pool.end(); }
+  }
   async query(url: string, registered: RegisteredSchema, tenantId: string, input: ContentQuery): Promise<ContentPage> {
     const schema = registered.definition;
     const fields = input.fields ?? Object.keys(schema.fields).filter(key => schema.fields[key]?.readable);

@@ -33,6 +33,7 @@ model Tenant {
   billingProviderEvents  BillingProviderEvent[]
   integrationConnections IntegrationConnection[]
   todos                  Todo[]
+  contentPatches         ContentPatch[]
 
   @@index([createdAt])
 }
@@ -739,6 +740,25 @@ model IdempotencyKey {
 
   @@unique([tenantId, actionKey, key])
   @@index([tenantId, actionKey])
+}
+
+model ContentPatch {
+  id String @id
+  tenantId String
+  sourceId String
+  revision String
+  state String @default("pending")
+  creatorId String
+  payloadJson Json
+  reviewerId String?
+  reviewedAt DateTime? @db.Timestamptz(6)
+  rejectionReason String?
+  appliedAt DateTime? @db.Timestamptz(6)
+  failureCode String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  @@index([tenantId, state, createdAt])
+  @@index([tenantId, sourceId])
 }
 
 enum OutboxStatus {

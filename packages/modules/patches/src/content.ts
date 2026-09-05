@@ -13,4 +13,5 @@ export type ContentRecord = { id: string; version: string; values: Record<string
 export type ContentPage = { records: ContentRecord[]; nextCursor: string | null; schemaVersion: string };
 export interface ContentReader {
   query(url: string, schema: RegisteredSchema, tenantId: string, query: ContentQuery): Promise<ContentPage>;
+  snapshots(url: string, schema: RegisteredSchema, tenantId: string, ids: string[]): Promise<ContentRecord[]>;
 }

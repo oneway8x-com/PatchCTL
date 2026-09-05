@@ -12,3 +12,7 @@ export * from "./use-cases/schema";
 export * from "./content";
 export * from "./content.postgres";
 export * from "./use-cases/read-content";
+export * from "./patch";
+export * from "./patch.repository";
+export * from "./use-cases/prepare-patch";
+export * from "./use-cases/get-patch";
