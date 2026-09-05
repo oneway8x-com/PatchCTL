@@ -1,5 +1,9 @@
 # Shared PatchCTL client
 
+For execution location, secret storage, and the local-first migration's current status, see
+[communication architecture](architecture/patchctl-communication.md). The legacy method example
+below assumes server-connected mode; it is not the local database command path.
+
 The CLI and Next.js browser UI use `createPatchctlClient` from
 `@corely/api-client/patchctl`. The HTTP endpoints remain in `apps/app`; server routes
 continue to invoke authorized use cases in `packages/modules/patches`.
@@ -17,7 +21,10 @@ continue to invoke authorized use cases in `packages/modules/patches`.
 - `packages/auth-client`: existing human sign-in/refresh/storage flow. It is not a
   dependency of the CLI or portable API client.
 
-Do not put source credentials or SQL in either client. Next.js server-side callers
+Do not put source credentials or SQL in the portable HTTP client or browser. The local-first
+CLI separately retrieves database credentials through its OS keyring adapter and uses the
+Node-only `@patchctl/postgres` package; those responsibilities do not belong in this HTTP package.
+Next.js server-side callers
 should use authorized use cases directly, not make HTTP calls to their own routes.
 Never share a mutable user-token singleton across server requests or Tenants.
 
@@ -44,8 +51,14 @@ contracts. Invalid responses fail with `INVALID_RESPONSE`, not unchecked type ca
 The client validates proposal/query/decision/apply input before making requests.
 `propose` returns a same-origin review URL (relative for the browser).
 
-Having a method in an SDK is not authorization: the server denies agent review/apply.
-The CLI exposes no decision/apply command and never receives a human credential.
+Having a method in an SDK is not authorization: the server denies agent review and legacy
+server-side apply. The CLI exposes no human decision command and uses scoped client credentials,
+not a human sign-in credential. Planned local execution still requires an exact human approval.
+
+The local-first working tree also adds `createLocalToken`, `localSubmit`, `localPatches`,
+`localPatch`, `localDecide`, and `localResult`. These manage review documents and reported
+outcomes, not direct server access to the user database. The presence of these methods does not
+mean local `sync` execution is implemented; check the communication architecture's status section.
 
 ## Transport policy
 

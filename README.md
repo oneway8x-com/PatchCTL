@@ -90,7 +90,10 @@ Deploy `apps/app` as the single active Vercel project:
 
 ## Docs
 
-New to PatchCTL? Follow the [customer getting-started guide](docs/customer-getting-started.md)
+Start with [PatchCTL communication architecture](docs/architecture/patchctl-communication.md)
+for how the CLI, API, web app, and user database interact, including local-first migration status.
+
+For the legacy server-connected mode, follow the [customer getting-started guide](docs/customer-getting-started.md)
 for account registration, operator-assisted database setup, CLI usage, and your first reviewed patch.
 
 For contribution and agent workflows, start with [Contributing](CONTRIBUTING.md), the
