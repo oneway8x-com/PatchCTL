@@ -1,2 +1,0 @@
--- Local Postgres init hook for docker-compose.local.yml.
--- Intentionally empty; Prisma migrations manage schema creation.
