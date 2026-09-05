@@ -73,4 +73,9 @@ Deploy `apps/app` as the single active Vercel project:
 
 ## Docs
 
+For contribution and agent workflows, start with [Contributing](CONTRIBUTING.md), the
+[Engineering Handbook](docs/ENGINEERING-HANDBOOK.md), [agent instructions](AGENTS.md), and the
+[repository skill catalog](docs/ai/skills-management.md). PatchCTL is solo-maintained: local
+agent work can proceed autonomously, while live content patches still require human approval.
+
 See `docs/architecture/*` and `docs/guides/*` for the current architecture reference.
