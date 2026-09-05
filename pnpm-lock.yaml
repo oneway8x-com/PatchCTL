@@ -314,6 +314,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.11
+      zod:
+        specifier: 'catalog:'
+        version: 3.25.76
 
   packages/api-client:
     dependencies:

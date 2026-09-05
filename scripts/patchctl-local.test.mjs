@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   copyFile,
+  cp,
   mkdir,
   mkdtemp,
   rm,
@@ -30,10 +31,11 @@ test("local agent launches apps/cli and forwards help and stdin validation", asy
         new URL(script, import.meta.url),
         resolve(fixture, "scripts", script),
       );
-    // Copy the real entrypoint: symlinking it would change Node's main-module identity.
-    await copyFile(
-      new URL("../apps/cli/dist/cli.js", import.meta.url),
-      resolve(fixture, "apps/cli/dist/cli.js"),
+    // Copy all compiled modules: symlinking the entrypoint changes its main-module identity.
+    await cp(
+      new URL("../apps/cli/dist/", import.meta.url),
+      resolve(fixture, "apps/cli/dist"),
+      { recursive: true },
     );
     await copyFile(
       new URL("../apps/cli/package.json", import.meta.url),

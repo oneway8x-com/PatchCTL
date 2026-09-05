@@ -12,6 +12,11 @@ const session = JSON.parse(
 const require = createRequire(
   new URL("../apps/app/package.json", import.meta.url),
 );
+const serverEnv = { ...process.env };
+delete serverEnv.PATCHCTL_CONTENT_TEST_DATABASE_URL;
+delete serverEnv.PATCHCTL_LOCAL_TEST_DATABASE_URL;
+delete serverEnv.PATCHCTL_DATABASE_URL;
+delete serverEnv.PATCHCTL_TOKEN;
 const child = spawn(
   process.execPath,
   [
@@ -27,12 +32,12 @@ const child = spawn(
     windowsHide: true,
     stdio: "inherit",
     env: {
-      ...process.env,
+      ...serverEnv,
       DATABASE_URL: session.url,
       JWT_SECRET: session.jwtSecret,
-      PATCHCTL_SOURCE_SECRETS: JSON.stringify({
+      PATCHCTL_SOURCE_SECRETS: process.env.PATCHCTL_LEGACY_SERVER_CONTENT === "1" ? JSON.stringify({
         demo: { tenantId: session.tenantId, url: session.url },
-      }),
+      }) : "{}",
     },
   },
 );

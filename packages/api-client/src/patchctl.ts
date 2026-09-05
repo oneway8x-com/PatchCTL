@@ -17,6 +17,8 @@ import {
   type PatchContentQueryInput,
   type PatchDecisionInput,
   type PatchApplyInput,
+  LocalPatchSchema, LocalPatchListSchema, LocalProposalSchema, LocalDecisionSchema, LocalResultSchema, LocalClientTokenSchema,
+  type LocalProposal, type LocalExecutionResult,
 } from "@corely/contracts";
 import { request, HttpError } from "./http/request.js";
 
@@ -185,6 +187,12 @@ export function createPatchctlClient(config: PatchctlClientConfig) {
   }
 
   return {
+    localSubmit: (input: LocalProposal) => call("/local-patches", LocalPatchSchema, "POST", parseInput(LocalProposalSchema, input)),
+    localPatch: (id: string) => call(`/local-patches/${segment(id)}`, LocalPatchSchema, "GET"),
+    localPatches: (after?: string, approved = false) => call(`/local-patches${query({ after, ...(approved ? { approved: "true" } : {}) })}`, LocalPatchListSchema, "GET"),
+    localDecide: (id: string, revision: string, decision: "APPROVED" | "REJECTED") => call(`/local-patches/${segment(id)}/decision`, LocalPatchSchema, "POST", parseInput(LocalDecisionSchema, { revision, decision })),
+    localResult: (id: string, result: LocalExecutionResult) => call(`/local-patches/${segment(id)}/execution-result`, LocalPatchSchema, "POST", parseInput(LocalResultSchema, result)),
+    createLocalToken: () => call("/local-client-token", LocalClientTokenSchema, "POST", {}),
     actor: (options?: CallOptions) =>
       call("/me", PatchActorSchema, "GET", undefined, options),
     sources: (options?: CallOptions) =>

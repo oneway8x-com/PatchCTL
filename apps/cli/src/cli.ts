@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { localCommands, runLocal } from "./local/commands.js";
 import { configDirectory, readConfig } from "./local/config.js";
 import { runPatchCommand } from "./local/patch-commands.js";
+import { runServerCommand } from "./local/server-commands.js";
 import {
   PatchProposalInputSchema,
   ContentQueryInputSchema,
@@ -28,6 +29,9 @@ Commands:
   update RESOURCE ID --set field=value [--dry-run]
   diff
   validate
+  login --server ORIGIN
+  submit
+  sync
 
 Legacy server commands (schema uses local configuration when connected):
   sources
@@ -140,6 +144,7 @@ export async function run(
   }: RunOptions = {},
 ): Promise<number> {
   try {
+    if (!args.includes("--help") && ["login", "submit", "sync"].includes(args[0])) return runServerCommand(args, { env, stdout, stderr });
     if (
       !args.includes("--help") &&
       (["patch", "update", "diff"].includes(args[0]) ||

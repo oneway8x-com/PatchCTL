@@ -38,6 +38,7 @@ export const draftSchema = z
   .object({
     id: z.string().uuid(),
     tenantId: tenantIdSchema,
+    databaseId: z.string().uuid().optional(),
     title: z.string().max(200).optional(),
     status: z.enum([
       "DRAFT",

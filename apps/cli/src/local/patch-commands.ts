@@ -101,10 +101,12 @@ export async function runPatchCommand(
             throw error;
         }
         const draft = startDraft(tenantId, title);
+        draft.databaseId = config.tenants[tenantId].databaseId;
         await save(draft);
         return { patch: draft };
       }
       const draft = await readDraft(directory, tenantId);
+      if (draft.databaseId !== config.tenants[tenantId].databaseId) throw new LocalError("DATABASE_CHANGED", "This draft belongs to a previous connection. Recreate the draft after inspecting the new database.");
       if (command === "patch") return { patch: draft };
       if (command === "diff")
         return { patchId: draft.id, operations: diffDraft(draft) };

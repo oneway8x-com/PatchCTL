@@ -34,6 +34,7 @@ model Tenant {
   integrationConnections IntegrationConnection[]
   todos                  Todo[]
   contentPatches         ContentPatch[]
+  localContentPatches    LocalContentPatch[]
 
   @@index([createdAt])
 }
@@ -740,6 +741,18 @@ model IdempotencyKey {
 
   @@unique([tenantId, actionKey, key])
   @@index([tenantId, actionKey])
+}
+
+model LocalContentPatch {
+  id String @id
+  tenantId String
+  connectionId String
+  revision String
+  status String @default("SUBMITTED")
+  document String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  @@index([tenantId, status, connectionId, createdAt])
 }
 
 model ContentPatch {

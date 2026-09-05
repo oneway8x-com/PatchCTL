@@ -14,6 +14,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
+    env: { PATCHCTL_LEGACY_SERVER_CONTENT: "1" },
     command: "pnpm --filter @corely/app dev --hostname 127.0.0.1 --port 3107",
     cwd: fileURLToPath(new URL("../../", import.meta.url)),
     url: "http://127.0.0.1:3107/login",

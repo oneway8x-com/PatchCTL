@@ -1,4 +1,4 @@
-import { authenticate, PrismaAccessRepository } from "@corely/modules-patches";
+import { authenticate, PrismaAccessRepository, PatchError } from "@corely/modules-patches";
 import { getPrisma } from "./prisma";
 import {
   PrismaSourceRepository,
@@ -19,6 +19,7 @@ export function patchRuntime() {
 }
 
 export function sourceRuntime() {
+  if (process.env.PATCHCTL_LEGACY_SERVER_CONTENT !== "1") throw new PatchError(410, "LOCAL_EXECUTION_REQUIRED", "Use the local PatchCTL client for content access and execution.");
   return {
     repository: new PrismaSourceRepository(getPrisma()),
     secrets: new EnvironmentSourceSecrets(

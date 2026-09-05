@@ -27,6 +27,8 @@ export const configSchema = z
       z
         .object({
           resources: z.array(selectionSchema),
+          databaseId: z.string().uuid().optional(),
+          server: z.object({ url: z.string().url(), tenantId: z.string(), connectionId: z.string().uuid() }).strict().optional(),
         })
         .strict(),
     ),

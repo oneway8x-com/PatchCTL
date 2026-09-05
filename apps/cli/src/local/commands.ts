@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline/promises";
+import { randomUUID } from "node:crypto";
 import {
   NativeCredentialStore,
   databaseCredential,
@@ -28,13 +29,13 @@ export const localCommands = [
   "get",
   "agent-guide",
 ];
-export async function hiddenSecret(): Promise<string> {
+export async function hiddenSecret(label = "PostgreSQL connection string"): Promise<string> {
   if (!process.stdin.isTTY || !process.stderr.isTTY)
     throw new LocalError(
       "CREDENTIAL_NOT_FOUND",
       "Interactive connection needs a terminal. For headless use, explicitly set PATCHCTL_DATABASE_URL.",
     );
-  process.stderr.write("PostgreSQL connection string (hidden): ");
+  process.stderr.write(`${label} (hidden): `);
   const input = process.stdin;
   const wasRaw = input.isRaw;
   input.setRawMode(true);
@@ -195,7 +196,7 @@ export async function runLocal(
       config.currentTenant = tenantId;
       // A new connection may point at an entirely different database. Require
       // explicit selection again rather than reusing the previous allowlist.
-      config.tenants[tenantId] = { resources: [] };
+      config.tenants[tenantId] = { resources: [], databaseId: randomUUID(), ...(config.tenants[tenantId]?.server ? { server: config.tenants[tenantId].server } : {}) };
       await writeConfig(directory, config);
       stdout.write(
         JSON.stringify({
