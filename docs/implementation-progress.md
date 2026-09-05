@@ -10,8 +10,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 4 | #5 Content reads | Implemented; 32 focused/integration tests pass |
 | 5 | #6 Patch persistence | Implemented; 42 focused/integration tests pass |
 | 6 | #7 Text corrections | Implemented; Unicode-aware text validation |
-| 7 | #10 Review UI | In progress |
-| 8 | #11 Approval/rejection | Pending |
+| 7 | #10 Review UI | Implemented; browser checks pass; actions follow in #11/#13 |
+| 8 | #11 Approval/rejection | In progress |
 | 9 | #12 Conflicts | Pending |
 | 10 | #13 Atomic apply | Pending |
 | 11 | #14 Audit | Pending |
@@ -37,3 +37,4 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - #2 production build and application typecheck passed. #3 adds configured Tenant-owned secret references, connection probing, redacted source APIs, and setup documentation. Focused suite: 21 passing tests.
 - Docker blocker resolved by starting the installed Docker Desktop. A dedicated test Postgres container is being provisioned on loopback port 55437.
 - #3/#4 verified against Postgres 17 in `patchctl-test-20260905`; migrations applied only to isolated `patchctl_test`. Schema checks verify the primary key, field types, Tenant column, and drift fingerprint. Patches/app typechecks pass; 28 focused/integration tests pass.
+- #10: production build passes; two Chromium checks pass for queue navigation, 50-record counts, null/empty distinction, safe HTML text rendering and pagination. Existing e2e config targets removed services; the new PatchCTL config runs against current Next.js. UI screenshot visually inspected.

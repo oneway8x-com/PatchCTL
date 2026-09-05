@@ -21,6 +21,7 @@ export default function DashboardLayout({
             </Badge>
           </div>
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
+            <Link href="/patches">Content patches</Link>
             <Link href="/todos">Todos</Link>
             <Link href="/login">Auth</Link>
           </nav>
