@@ -6,3 +6,6 @@ export * from "./source";
 export * from "./source.repository";
 export * from "./postgres";
 export * from "./use-cases/sources";
+export * from "./content-schema";
+export * from "./schema.postgres";
+export * from "./use-cases/schema";
