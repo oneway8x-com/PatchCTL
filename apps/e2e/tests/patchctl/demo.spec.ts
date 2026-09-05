@@ -53,5 +53,33 @@ test("real CLI → ten English summaries → browser approval → Postgres; reje
       await expect(page.getByTestId("patch-state")).toHaveText(scenario === "reject" ? "rejected" : "conflict");
       expect(await rows()).toEqual(unchanged);
     }
+    // Cumulative release checks use extra fixtures only after the ten-article demo.
+    for (let n = 100; n < 150; n++) await pool.query(`INSERT INTO "${session.namespace}".articles (id,tenant_id,title,body,summary_fr) VALUES ($1,$2,'Bulk article','Unchanged body','Les modifications sont vérifiées.')`, [String(n), session.tenantId]);
+    const bulk = await cli(["read", session.sourceId, "--stdin"], { limit: 100, filters: [{ field: "summary_en", op: "missing" }] });
+    expect(bulk.records).toHaveLength(50);
+    const bulkBefore = await rows();
+    const translated = await cli(["propose", "--stdin"], { sourceId: session.sourceId, schemaVersion: bulk.schemaVersion, reason: "Translate 50 French summaries into English", mode: "fill-missing", translation: { sourceField: "summary_fr", targetField: "summary_en" },
+      records: bulk.records.map((record: any) => ({ id: record.id, version: record.version, changes: { summary_en: "Changes are reviewed.\nRésumé — ✓" } })) });
+    expect(await rows()).toEqual(bulkBefore);
+    await page.goto(translated.reviewUrl);
+    await expect(page.getByTestId("affected-count")).toContainText("50 records affected");
+    await page.getByRole("button", { name: "Approve and apply", exact: true }).click();
+    await expect(page.getByTestId("patch-state")).toHaveText("applied");
+    expect(await rows()).toEqual(bulkBefore.map(record => Number(record.id) >= 100 ? { ...record, summary_en: "Changes are reviewed.\nRésumé — ✓" } : record));
+    const targets = await cli(["targets", session.sourceId, "category_id"]);
+    expect(targets.targets[0]).toMatchObject({ id: "news", label: "News" });
+    const one = await cli(["read", session.sourceId, "--limit", "1"]);
+    const correction = await cli(["propose", "--stdin"], { sourceId: session.sourceId, schemaVersion: one.schemaVersion, reason: "Correct one title and assign placement", records: [{ id: one.records[0].id, version: one.records[0].version, changes: { title: "Corrected title — English", placement: "EARN_TOP", category_id: "news" } }] });
+    const singleBefore = await rows();
+    const premature = await request.post(`/api/patchctl/patches/${correction.id}/apply`, { headers: { Authorization: `Bearer ${session.humanToken}` }, data: { revision: correction.revision } });
+    expect(premature.status()).toBe(409);
+    const tampered = await request.post(`/api/patchctl/patches/${correction.id}/decision`, { headers: { Authorization: `Bearer ${session.humanToken}` }, data: { revision: "f".repeat(64), decision: "approved" } });
+    expect(tampered.status()).toBe(409);
+    expect(await rows()).toEqual(singleBefore);
+    await page.goto(correction.reviewUrl);
+    await expect(page.getByText(/→ News/)).toBeVisible();
+    await page.getByRole("button", { name: "Approve and apply", exact: true }).click();
+    await expect(page.getByTestId("patch-state")).toHaveText("applied");
+    expect(await rows()).toEqual(singleBefore.map(record => record.id === "01" ? { ...record, title: "Corrected title — English", placement: "EARN_TOP", category_id: "news" } : record));
   } finally { await pool.end(); }
 });

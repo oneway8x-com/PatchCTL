@@ -40,4 +40,14 @@ describe.skipIf(!url)("isolated Postgres schema and connection", () => {
   it("redacts credentials from connection failures", async () => {
     await expect(new PostgresProbe().test("postgresql://private:secret@127.0.0.1:1/missing")).rejects.toMatchObject({ message: "Could not connect to the content source." });
   });
+  it("rejects user triggers and row-security policies instead of assuming side effects are safe", async () => {
+    const inspector = new PostgresSchemaInspector(), schema = contentSchemaInput.parse(input);
+    await pool.query(`CREATE FUNCTION "${testNamespace}".touch() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NEW; END'`);
+    await pool.query(`CREATE TRIGGER touch BEFORE UPDATE ON "${testNamespace}".articles FOR EACH ROW EXECUTE FUNCTION "${testNamespace}".touch()`);
+    await expect(inspector.inspect(url!, schema)).rejects.toMatchObject({ code: "UNSUPPORTED_TABLE_BEHAVIOR" });
+    await pool.query(`DROP TRIGGER touch ON "${testNamespace}".articles`);
+    await pool.query(`ALTER TABLE "${testNamespace}".articles ENABLE ROW LEVEL SECURITY`);
+    await expect(inspector.inspect(url!, schema)).rejects.toMatchObject({ code: "UNSUPPORTED_TABLE_BEHAVIOR" });
+    await pool.query(`ALTER TABLE "${testNamespace}".articles DISABLE ROW LEVEL SECURITY`);
+  });
 });

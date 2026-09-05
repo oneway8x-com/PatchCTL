@@ -27,6 +27,7 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 ## Blockers
 
 - 2026-09-05: GitHub Projects updates are blocked: the active CLI token has `repo` but lacks `project`. `gh project item-list 7 --owner hadoan` fails with insufficient scopes. Remedy: `gh auth refresh --hostname github.com --scopes project`. Continue implementation and issue comments; mirror status here until the board can be synchronized.
+- 2026-09-05: Optional lint execution cannot start: installed ESLint 9 has no root `eslint.config.js/mjs/cjs`. No new lint configuration is invented during feature work. Typecheck, behavior tests, Prisma validation and build remain the release gates.
 
 ## Verification
 
@@ -41,3 +42,4 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - #11/#12: four Chromium tests pass, including exact-revision approval and hiding agent controls. Focused/integration suite: 56 tests pass. Real Postgres verifies whole-record conflicts, deleted/moved records, and locks blocking concurrent updates until the final transaction releases them.
 - #13: 62 tests pass. Real Postgres confirms all-or-nothing rollback, zero writes on conflicts, concurrent apply deduplication, and recovery after target commit succeeds but metadata persistence fails. Patches/app typechecks pass. Target receipt setup is explicit operator SQL, never agent DDL.
 - #14: 65 tests pass, including real Prisma membership checks, concurrent decision CAS, atomic audit/state persistence, replay deduplication, history pagination, and audit surviving source-record deletion. All new feature typechecks pass.
+- #18: root typecheck and Prisma validation now pass after correcting three Todo test query inputs. Root Vitest discovery no longer runs nested module tests twice. Plain-table safety rejects user triggers, rewrite rules, partitions, row security and cascading writes through editable referenced keys. CI now runs isolated Postgres, CLI and browser checks sequentially around builds. A local overlapping build/demo run failed because rebuilding contracts temporarily removed its output; rerun sequentially (not a product defect).

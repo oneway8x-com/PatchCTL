@@ -8,6 +8,8 @@ import { PatchError } from "./patch.errors";
 export async function lockAndValidateRecords(client: PoolClient, schema: RegisteredSchema, tenantId: string, records: PatchRecord[]) {
   // The caller owns this transaction; table/row locks remain held until its commit/rollback.
   await client.query(`LOCK TABLE ${tableName(schema.definition)} IN ROW SHARE MODE`);
+  const targets = [...new Set(Object.values(schema.definition.fields).filter(field => field.type === "relation" && field.relation).map(field => tableName(field.relation!)))].sort();
+  for (const target of targets) await client.query(`LOCK TABLE ${target} IN ROW SHARE MODE`);
   await assertSchema(client, schema);
   const current = await readSnapshots(client, schema, tenantId, records.map(r => r.id), true);
   const conflicts = records.flatMap(record => {

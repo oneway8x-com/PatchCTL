@@ -5,6 +5,11 @@ import { PatchError } from "./patch.errors";
 
 export async function inspectSchema(client: PoolClient, schema: ContentSchema): Promise<string> {
   const table = tableName(schema);
+  const behavior = (await client.query(`SELECT relkind, relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid=to_regclass($1)`, [table])).rows[0];
+  const triggers = (await client.query(`SELECT pg_get_triggerdef(oid) AS definition, tgenabled FROM pg_trigger WHERE tgrelid=to_regclass($1) AND NOT tgisinternal ORDER BY tgname`, [table])).rows;
+  const rules = (await client.query(`SELECT rulename FROM pg_rewrite WHERE ev_class=to_regclass($1)`, [table])).rows;
+  if (!behavior || behavior.relkind !== "r" || behavior.relrowsecurity || behavior.relforcerowsecurity || triggers.length || rules.length)
+    throw new PatchError(400, "UNSUPPORTED_TABLE_BEHAVIOR", "Use a plain table without user triggers, rewrite rules, partitions, or row-security policies. Domain side effects require a dedicated integration.");
   const columns = (await client.query(`SELECT a.attname AS name, t.typname AS type, t.typtype AS kind,
     a.attnotnull AS required, a.attgenerated AS generated, a.attidentity AS identity,
     a.atttypmod AS modifier FROM pg_attribute a JOIN pg_type t ON t.oid = a.atttypid
@@ -32,6 +37,11 @@ export async function inspectSchema(client: PoolClient, schema: ContentSchema): 
   const enumValues = (await client.query(`SELECT a.attname AS field, e.enumlabel AS value FROM pg_attribute a
     JOIN pg_enum e ON e.enumtypid=a.atttypid WHERE a.attrelid=to_regclass($1) ORDER BY a.attname,e.enumsortorder`, [table])).rows;
   const relations: Record<string, string> = {};
+  const cascadingReferences = (await client.query(`SELECT a.attname AS field FROM pg_constraint c
+    JOIN pg_attribute a ON a.attrelid=c.confrelid AND a.attnum=ANY(c.confkey)
+    WHERE c.contype='f' AND c.confrelid=to_regclass($1) AND c.confupdtype NOT IN ('a','r')`, [table])).rows;
+  if (cascadingReferences.some(reference => schema.fields[reference.field]?.editable))
+    throw new PatchError(400, "UNSUPPORTED_TABLE_BEHAVIOR", "Editable fields cannot cascade updates into other records.");
   for (const [name, field] of Object.entries(schema.fields)) {
     if (field.type === "enum" && columns.find(c => c.name === name)?.kind === "e" && field.values?.some(value => !enumValues.some(e => e.field === name && e.value === value)))
       throw new PatchError(400, "INVALID_SCHEMA", `Field ${name} declares an unknown database enum value.`);
@@ -45,7 +55,7 @@ export async function inspectSchema(client: PoolClient, schema: ContentSchema): 
     relations[name] = await inspectSchema(client, { namespace: target.namespace, table: target.table, key: target.key,
       isolation: { mode: "row", tenantColumn: target.tenantColumn }, fields: { [target.label]: { type: "text", readable: true, editable: false, nullable: false, maxLength: 10000 } } });
   }
-  return fingerprint({ columns, constraints, primary, enumValues, relations });
+  return fingerprint({ columns, constraints, primary, enumValues, relations, behavior, triggers, rules, cascadingReferences });
 }
 export class PostgresSchemaInspector implements SchemaInspector {
   async inspect(url: string, schema: ContentSchema) {

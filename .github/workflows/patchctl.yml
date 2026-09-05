@@ -1,0 +1,55 @@
+name: PatchCTL release checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: patchctl_test
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: patchctl_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U patchctl_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
+      PATCHCTL_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm --filter @corely/data exec prisma validate
+      - run: pnpm --filter @corely/data exec prisma migrate deploy
+      - run: pnpm build:packages
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter patchctl test
+      - run: pnpm --filter @corely/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl.config.ts
+      - name: Seed isolated full-stack demo without exposing credentials
+        run: |
+          pnpm exec tsx scripts/patchctl-demo.ts > /tmp/patchctl-demo-result.json
+          node -e 'const fs=require("fs"); const result=JSON.parse(fs.readFileSync("/tmp/patchctl-demo-result.json","utf8")); fs.appendFileSync(process.env.GITHUB_ENV,"PATCHCTL_DEMO_SESSION="+result.sessionPath+"\n")'
+      - run: pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl-demo.config.ts
+      - run: pnpm build
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-screenshots
+          path: apps/e2e/.patchctl-results/**/*.png
+          if-no-files-found: ignore

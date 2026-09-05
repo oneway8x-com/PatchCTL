@@ -46,6 +46,14 @@ test("reports authentication and conflict exit codes", async () => {
   assert.equal((await invoke(["sources"], "", { ok: false, status: 401, json: async () => ({ code: "UNAUTHENTICATED" }) })).code, 3);
   assert.equal((await invoke(["propose", "--stdin"], JSON.stringify(proposal), { ok: false, status: 409, json: async () => ({ code: "STALE_RECORD" }) })).code, 4);
 });
+
+test("discovers relation targets without write requests and preserves pagination", async () => {
+  const result = await invoke(["targets", "source", "category_id", "--after", "cat-1"]);
+  assert.equal(result.code, 0);
+  assert.equal(result.calls[0][0].pathname, "/api/patchctl/sources/source/relations/category_id");
+  assert.equal(result.calls[0][0].searchParams.get("after"), "cat-1");
+  assert.equal(result.calls[0][1].method, "GET");
+});
 test("does not retry network errors or print secret-bearing exception text", async () => {
   const result = await invoke(["sources"], "", new Error("private-token connection refused"));
   assert.equal(result.code, 5); assert.equal(result.calls.length, 1); assert.ok(!result.stderr.includes("private-token"));

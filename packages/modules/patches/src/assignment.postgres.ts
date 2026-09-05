@@ -35,7 +35,7 @@ export async function validateRelationTargets(client: PoolClient, schema: Regist
 }
 export class PostgresRelationReader implements RelationReader {
   async targets(url: string, schema: RegisteredSchema, tenantId: string, field: string, input: { ids?: string[]; after?: string; limit: number }) {
-    const pool = sourcePool(url), client = await pool.connect();
+    const pool = sourcePool(url), client = await pool.connect().catch(async error => { await pool.end(); throw error; });
     try {
       await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
       await assertSchema(client, schema);

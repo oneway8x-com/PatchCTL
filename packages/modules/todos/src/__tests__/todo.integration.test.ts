@@ -54,11 +54,11 @@ describe("Todo Integration & Tenant Isolation", () => {
       repository
     );
 
-    const resultA = await listTodos({}, { tenantId: tenantA }, repository);
+    const resultA = await listTodos({ page: 1, pageSize: 20 }, { tenantId: tenantA }, repository);
     expect(resultA.items.length).toBe(1);
     expect(resultA.items[0].title).toBe("Buy milk");
 
-    const resultB = await listTodos({}, { tenantId: tenantB }, repository);
+    const resultB = await listTodos({ page: 1, pageSize: 20 }, { tenantId: tenantB }, repository);
     expect(resultB.items.length).toBe(1);
     expect(resultB.items[0].title).toBe("Buy bread");
   });
@@ -82,7 +82,7 @@ describe("Todo Integration & Tenant Isolation", () => {
 
   it("allows tenant A to delete their own todo", async () => {
     await deleteTodo(todoA1Id, { tenantId: tenantA }, repository);
-    const resultA = await listTodos({}, { tenantId: tenantA }, repository);
+    const resultA = await listTodos({ page: 1, pageSize: 20 }, { tenantId: tenantA }, repository);
     expect(resultA.items.length).toBe(0);
   });
 });

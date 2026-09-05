@@ -33,7 +33,7 @@ export async function applyPatch(input: unknown, actor: Actor, id: string, patch
     await patches.finishApply(patch, receipt);
     return { id, state: "applied", appliedAt: receipt.appliedAt, affectedRecords: receipt.affectedRecords };
   } catch (error) {
-    if (error instanceof PatchError && ["RELATION_CONFLICT", "RECORD_CONFLICT", "SCHEMA_CHANGED", "INVALID_SCHEMA", "WRITE_MISMATCH", "CONSTRAINT_FAILED"].includes(error.code))
+    if (error instanceof PatchError && ["UNSUPPORTED_TABLE_BEHAVIOR", "RELATION_CONFLICT", "RECORD_CONFLICT", "SCHEMA_CHANGED", "INVALID_SCHEMA", "WRITE_MISMATCH", "CONSTRAINT_FAILED"].includes(error.code))
       await patches.failApply(patch, error.code, error.code !== "CONSTRAINT_FAILED", actor);
     // Network/metadata errors retain applying state. A retry consults the committed target receipt.
     throw error;
