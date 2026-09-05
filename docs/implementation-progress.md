@@ -7,8 +7,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 1 | #2 Tenant authorization | Implemented; verification in progress |
 | 2 | #3 Postgres connection | Implemented; local database check pending |
 | 3 | #4 Content schema | Implemented; 28 focused/integration tests pass |
-| 4 | #5 Content reads | In progress |
-| 5 | #6 Patch persistence | Pending |
+| 4 | #5 Content reads | Implemented; 32 focused/integration tests pass |
+| 5 | #6 Patch persistence | In progress |
 | 6 | #7 Text corrections | Pending |
 | 7 | #10 Review UI | Pending |
 | 8 | #11 Approval/rejection | Pending |
