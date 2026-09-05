@@ -1,0 +1,11 @@
+{
+  "name": "@corely/modules-patches",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@prisma/client": "catalog:", "pg": "catalog:", "zod": "catalog:" },
+  "devDependencies": { "@corely/tsconfig": "workspace:*", "@types/node": "catalog:", "@types/pg": "catalog:", "typescript": "catalog:" }
+}

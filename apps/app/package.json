@@ -10,6 +10,7 @@
     "@corely/contracts": "workspace:*",
     "@corely/kernel": "workspace:*",
     "@corely/modules-todos": "workspace:*",
+    "@corely/modules-patches": "workspace:*",
     "@corely/storage": "workspace:*",
     "@corely/ui": "workspace:*",
     "@prisma/adapter-pg": "catalog:",
