@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth/auth-context";
-import { fetchActor, fetchPatch, patchRequest } from "../patches-api";
+import { fetchActor, fetchPatch, patchClient } from "../patches-api";
 import { PatchHistory } from "./PatchHistory";
 
 function Value({ value }: { value: unknown }) {
@@ -40,13 +40,7 @@ export function PatchDetail({ id }: { id: string }) {
   });
   const schemaQuery = useQuery({
     queryKey: ["patch-schema", ...scope, query.data?.payload.sourceId],
-    queryFn: () =>
-      patchRequest<{
-        definition: {
-          table: string;
-          fields: Record<string, { locale?: string; type?: string }>;
-        };
-      }>(`/sources/${query.data!.payload.sourceId}/schema`),
+    queryFn: () => patchClient.schema(query.data!.payload.sourceId),
     enabled: !!query.data,
     retry: false,
   });
@@ -76,7 +70,7 @@ export function PatchDetail({ id }: { id: string }) {
     setBusy(true);
     setActionError(null);
     try {
-      await patchRequest(`/patches/${id}/decision`, "POST", {
+      await patchClient.decide(id, {
         revision: patch.revision,
         decision,
         ...(decision === "rejected" ? { reason: rejectionReason } : {}),
@@ -85,7 +79,7 @@ export function PatchDetail({ id }: { id: string }) {
         decision === "approved" &&
         actorQuery.data?.permissions.includes("apply")
       )
-        await patchRequest(`/patches/${id}/apply`, "POST", {
+        await patchClient.apply(id, {
           revision: patch.revision,
         });
     } catch {
@@ -101,7 +95,7 @@ export function PatchDetail({ id }: { id: string }) {
     setBusy(true);
     setActionError(null);
     try {
-      await patchRequest(`/patches/${id}/apply`, "POST", {
+      await patchClient.apply(id, {
         revision: patch.revision,
       });
     } catch {

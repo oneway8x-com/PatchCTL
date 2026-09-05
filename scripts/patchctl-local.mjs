@@ -147,6 +147,7 @@ async function main() {
       "deploy",
     ]);
     await pnpm(["build:packages"]);
+    await pnpm(["--filter", "patchctl", "build"]);
     const result = JSON.parse(
       await pnpm(["exec", "tsx", "scripts/patchctl-demo.ts"], {
         capture: true,
@@ -198,7 +199,7 @@ async function main() {
     await run(
       process.execPath,
       [
-        "packages/patchctl-cli/cli.mjs",
+        "apps/cli/dist/cli.js",
         ...args.filter((arg, index) => !(index === 0 && arg === "--")),
       ],
       { env: agentEnv },

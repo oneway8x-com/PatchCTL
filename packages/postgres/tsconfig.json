@@ -1,13 +1,14 @@
 {
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": true,
-    "noEmit": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "strict": true,
     "skipLibCheck": true,
-    "strict": false
+    "noEmitOnError": true
   },
-  "include": ["cli.mjs"]
+  "include": ["src/**/*.ts"]
 }

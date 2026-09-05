@@ -1,0 +1,30 @@
+{
+  "name": "patchctl",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "patchctl": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "pnpm run build && node --test cli.check.mjs local.check.mjs drafts.check.mjs",
+    "build": "pnpm --filter @patchctl/postgres build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @patchctl/postgres build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@corely/api-client": "workspace:*",
+    "@corely/contracts": "workspace:*",
+    "@napi-rs/keyring": "^2.0.0",
+    "@patchctl/postgres": "workspace:*",
+    "pg": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "typescript": "catalog:"
+  }
+}

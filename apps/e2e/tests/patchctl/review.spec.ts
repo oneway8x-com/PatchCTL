@@ -1,5 +1,32 @@
 import { test, expect } from "@playwright/test";
 const id = "e1bf2bb3-d983-4a69-b387-1f93124c1a24";
+const patchDefaults = {
+  reviewerId: null,
+  reviewedAt: null,
+  rejectionReason: null,
+  appliedAt: null,
+  failureCode: null,
+};
+const payloadDefaults = {
+  schemaVersion: "a".repeat(64),
+  sourceFingerprint: "c".repeat(64),
+};
+const fieldDefaults = {
+  readable: true,
+  editable: false,
+  nullable: true,
+  maxLength: 10000,
+};
+const schemaDefaults = {
+  namespace: "public",
+  key: "id",
+  isolation: { mode: "row", tenantColumn: "tenant_id" },
+  schedules: [],
+};
+const schemaVersion = {
+  version: "a".repeat(64),
+  versionStrategy: "postgres-xmin-and-whole-row",
+};
 test.beforeEach(async ({ page }) => {
   let state = "pending";
   await page.addInitScript(() =>
@@ -19,7 +46,17 @@ test.beforeEach(async ({ page }) => {
     const url = route.request().url();
     if (url.endsWith("/decision"))
       state = route.request().postDataJSON().decision;
-    if (url.endsWith("/apply")) state = "applied";
+    if (url.endsWith("/apply")) {
+      state = "applied";
+      return route.fulfill({
+        json: {
+          id,
+          state,
+          appliedAt: "2026-09-05T10:00:00Z",
+          affectedRecords: 50,
+        },
+      });
+    }
     if (url.endsWith("/history"))
       return route.fulfill({
         json: {
@@ -39,6 +76,7 @@ test.beforeEach(async ({ page }) => {
       return route.fulfill({
         json: {
           id: "reviewer",
+          ownerUserId: "reviewer",
           tenantId: "tenant",
           kind: "human",
           permissions: ["read", "review", "apply"],
@@ -48,9 +86,13 @@ test.beforeEach(async ({ page }) => {
     if (url.endsWith("/schema"))
       return route.fulfill({
         json: {
+          ...schemaVersion,
           definition: {
+            ...schemaDefaults,
             table: "articles",
-            fields: { summary_en: { locale: "en" } },
+            fields: {
+              summary_en: { ...fieldDefaults, type: "text", locale: "en" },
+            },
           },
         },
       });
@@ -60,11 +102,12 @@ test.beforeEach(async ({ page }) => {
           items: [
             {
               id,
+              revision: "a".repeat(64),
               reason: "Add English summaries",
               affectedRecords: 50,
               state: "pending",
               sourceId: "source",
-              creator: { id: "agent", kind: "agent" },
+              creator: { id: "agent", kind: "agent", ownerUserId: "owner" },
               createdAt: "2026-09-05T10:00:00Z",
             },
           ],
@@ -73,17 +116,20 @@ test.beforeEach(async ({ page }) => {
       });
     return route.fulfill({
       json: {
+        ...patchDefaults,
         id,
         tenantId: "tenant",
         revision: "a".repeat(64),
         state,
         payload: {
+          ...payloadDefaults,
           sourceId: "source",
           reason: "Add English summaries",
           creator: { id: "agent", kind: "agent", ownerUserId: "owner" },
           createdAt: "2026-09-05T10:00:00Z",
           records: Array.from({ length: 50 }, (_, i) => ({
             id: String(i + 1),
+            version: "b".repeat(32),
             before: { summary_en: i === 0 ? null : "" },
             after: {
               summary_en:
@@ -114,6 +160,38 @@ test("sends the reviewed revision and refreshes after a human decision", async (
   await expect(page.getByTestId("patch-state")).toHaveText("applied");
   await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0);
 });
+
+test("reads the current browser token again when refreshing the queue", async ({
+  page,
+}) => {
+  await page.goto("/patches");
+  await expect(
+    page.getByText("50 records · agent agent", { exact: true }),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    localStorage.setItem("accessToken", "rotated-test-session"),
+  );
+  const refreshed = page.waitForRequest((request) =>
+    request.url().includes("/api/patchctl/patches?"),
+  );
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  expect((await refreshed).headers().authorization).toBe(
+    "Bearer rotated-test-session",
+  );
+});
+
+test("rejects malformed patch responses and does not offer approval", async ({
+  page,
+}) => {
+  await page.route(`**/api/patchctl/patches/${id}`, (route) =>
+    route.fulfill({ json: { id, state: "pending" } }),
+  );
+  await page.goto(`/patches/${id}`);
+  await expect(
+    page.getByRole("alert").filter({ hasText: "This patch is unavailable" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0);
+});
 test("does not expose approval to agent credentials even with claimed review permission", async ({
   page,
 }) => {
@@ -121,6 +199,9 @@ test("does not expose approval to agent credentials even with claimed review per
     route.fulfill({
       json: {
         id: "agent",
+        ownerUserId: "owner",
+        tenantId: "tenant",
+        connectionIds: null,
         kind: "agent",
         permissions: ["read", "review", "apply"],
       },
@@ -141,24 +222,35 @@ test("shows immutable relation labels alongside stable target IDs", async ({
   await page.route(`**/api/patchctl/patches/${id}`, (route) =>
     route.fulfill({
       json: {
+        ...patchDefaults,
         id,
         tenantId: "tenant",
         revision: "a".repeat(64),
         state: "pending",
         payload: {
+          ...payloadDefaults,
           sourceId: "source",
           reason: "Assign category",
-          creator: { kind: "agent", id: "agent" },
+          creator: { kind: "agent", id: "agent", ownerUserId: "owner" },
           createdAt: "2026-09-05T10:00:00Z",
           records: [
             {
               id: "1",
+              version: "b".repeat(32),
               before: { category_id: "cat-1" },
               after: { category_id: "cat-2" },
               relations: {
                 category_id: {
-                  before: { id: "cat-1", label: "Old category" },
-                  after: { id: "cat-2", label: "New category" },
+                  before: {
+                    id: "cat-1",
+                    label: "Old category",
+                    version: "b".repeat(32),
+                  },
+                  after: {
+                    id: "cat-2",
+                    label: "New category",
+                    version: "b".repeat(32),
+                  },
                 },
               },
             },
@@ -197,9 +289,11 @@ test("labels schedule instants as UTC and leaves activation to the consuming app
   await page.route("**/api/patchctl/sources/source/schema", (route) =>
     route.fulfill({
       json: {
+        ...schemaVersion,
         definition: {
+          ...schemaDefaults,
           table: "promotions",
-          fields: { starts_at: { type: "timestamp" } },
+          fields: { starts_at: { ...fieldDefaults, type: "timestamp" } },
         },
       },
     }),
@@ -207,18 +301,21 @@ test("labels schedule instants as UTC and leaves activation to the consuming app
   await page.route(`**/api/patchctl/patches/${id}`, (route) =>
     route.fulfill({
       json: {
+        ...patchDefaults,
         id,
         tenantId: "tenant",
         revision: "a".repeat(64),
         state: "pending",
         payload: {
+          ...payloadDefaults,
           sourceId: "source",
           reason: "Schedule promotion",
-          creator: { kind: "agent", id: "agent" },
+          creator: { kind: "agent", id: "agent", ownerUserId: "owner" },
           createdAt: "2026-09-05T10:00:00Z",
           records: [
             {
               id: "1",
+              version: "b".repeat(32),
               before: { starts_at: null },
               after: { starts_at: "2026-09-01T08:00:00.000Z" },
             },

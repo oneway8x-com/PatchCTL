@@ -1,10 +1,22 @@
-# CorelyBase
+# PatchCTL
 
-CorelyBase is now a **Next.js-first modular monolith**.
+Safe content changes for coding agents.
+
+PatchCTL is moving to a CLI-first PostgreSQL workflow: agents prepare patches,
+humans review them, and the local client applies approved changes. The intended
+principle is: **Credentials stay local. Agents propose. Humans approve. Local
+clients execute.** PatchCTL does not call an LLM.
+
+The [local CLI foundation](docs/local-cli.md) currently supports secure connection
+storage, explicit resource/column selection, schema inspection, record reads,
+local drafts, updates, diffs, and validation.
+Local patch submission and `sync` are still pending. The existing server-connected
+review application below is the legacy workflow, not the completed local-first MVP.
 
 The active architecture is:
 
 - `apps/app` for pages and synchronous API route handlers
+- `apps/cli` for the `patchctl` terminal application ([CLI usage](apps/cli/README.md))
 - `packages/modules/*` for business logic
 - `packages/contracts` for shared request/response schemas
 - `packages/data/prisma` for schema and migrations
@@ -62,6 +74,7 @@ pnpm prisma:studio
 ## Active paths
 
 - app runtime: `apps/app`
+- CLI source: `apps/cli/src/cli.ts`; compiled entrypoint: `apps/cli/dist/cli.js`
 - route handlers: `apps/app/app/api`
 - UI modules: `apps/app/src/modules`
 - storage runtime: `apps/app/src/server/object-storage.ts`
@@ -77,9 +90,16 @@ Deploy `apps/app` as the single active Vercel project:
 
 ## Docs
 
+Start with [PatchCTL communication architecture](docs/architecture/patchctl-communication.md)
+for how the CLI, API, web app, and user database interact, including local-first migration status.
+
+For the legacy server-connected mode, follow the [customer getting-started guide](docs/customer-getting-started.md)
+for account registration, operator-assisted database setup, CLI usage, and your first reviewed patch.
+
 For contribution and agent workflows, start with [Contributing](CONTRIBUTING.md), the
 [Engineering Handbook](docs/ENGINEERING-HANDBOOK.md), [agent instructions](AGENTS.md), and the
 [repository skill catalog](docs/ai/skills-management.md). PatchCTL is solo-maintained: local
 agent work can proceed autonomously, while live content patches still require human approval.
 
-See `docs/architecture/*` and `docs/guides/*` for the current architecture reference.
+See the [shared CLI/browser client architecture](docs/patchctl-client.md),
+`docs/architecture/*`, and `docs/guides/*` for the current architecture reference.

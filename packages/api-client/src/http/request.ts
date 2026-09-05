@@ -5,14 +5,14 @@ import {
   type RetryableResult,
   type RetryPolicyOptions,
   shouldRetry,
-} from "../retry/retryPolicy";
-import { createIdempotencyKey } from "../idempotency";
+} from "../retry/retryPolicy.js";
+import { createIdempotencyKey } from "../idempotency.js";
 
 export class HttpError extends Error {
   constructor(
     message: string,
     public status: number | null,
-    public body?: unknown
+    public body?: unknown,
   ) {
     super(message);
     this.name = "HttpError";
@@ -32,15 +32,24 @@ export type RequestOptions = {
   parseJson?: boolean;
   streaming?: boolean;
   signal?: AbortSignal;
+  fetch?: typeof fetch;
+  redirect?: RequestRedirect;
+  credentials?: RequestCredentials;
 };
 
 type InternalInit = RequestInit & { url: string };
 
 export async function request<T = unknown>(opts: RequestOptions): Promise<T> {
-  const policy: RetryPolicyOptions = { ...defaultRetryPolicy, ...(opts.retry ?? {}) };
+  const fetchImpl = opts.fetch ?? fetch;
+  const policy: RetryPolicyOptions = {
+    ...defaultRetryPolicy,
+    ...(opts.retry ?? {}),
+  };
   const method = (opts.method ?? "GET").toUpperCase();
   const idempotencyKey =
-    opts.idempotencyKey && opts.idempotencyKey.length ? opts.idempotencyKey : undefined;
+    opts.idempotencyKey && opts.idempotencyKey.length
+      ? opts.idempotencyKey
+      : undefined;
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...(opts.headers as Record<string, string>),
@@ -60,7 +69,9 @@ export async function request<T = unknown>(opts: RequestOptions): Promise<T> {
   }
 
   const body =
-    opts.body && typeof opts.body === "object" && !(opts.body instanceof FormData)
+    opts.body &&
+    typeof opts.body === "object" &&
+    !(opts.body instanceof FormData)
       ? JSON.stringify(opts.body)
       : (opts.body as BodyInit | null | undefined);
 
@@ -72,7 +83,8 @@ export async function request<T = unknown>(opts: RequestOptions): Promise<T> {
     url: opts.url,
     method,
     headers,
-    credentials: "include",
+    credentials: opts.credentials ?? "include",
+    ...(opts.redirect ? { redirect: opts.redirect } : {}),
   };
   if (opts.signal) {
     init.signal = opts.signal;
@@ -83,13 +95,13 @@ export async function request<T = unknown>(opts: RequestOptions): Promise<T> {
 
   if (opts.streaming) {
     // For streaming, attempt only once to avoid mid-stream retries.
-    return executeOnce<T>(init);
+    return executeOnce<T>(init, fetchImpl);
   }
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= policy.maxAttempts; attempt++) {
     try {
-      const response = await fetch(init.url, init);
+      const response = await fetchImpl(init.url, init);
 
       if (response.ok) {
         return parseResponse<T>(response, opts.parseJson !== false);
@@ -117,21 +129,30 @@ export async function request<T = unknown>(opts: RequestOptions): Promise<T> {
         errorRetryContext.idempotencyKey = idempotencyKey;
       }
       if (!shouldRetry(attempt, errorRetryContext, policy.maxAttempts)) {
-        throw new HttpError(error instanceof Error ? error.message : "Request failed", null, error);
+        throw new HttpError(
+          error instanceof Error ? error.message : "Request failed",
+          null,
+          error,
+        );
       }
       await delayForRetry(attempt, policy);
     }
   }
 
   throw new HttpError(
-    lastError instanceof Error ? lastError.message : "Request failed after retries",
+    lastError instanceof Error
+      ? lastError.message
+      : "Request failed after retries",
     null,
-    lastError
+    lastError,
   );
 }
 
-async function executeOnce<T>(init: InternalInit): Promise<T> {
-  const response = await fetch(init.url, init);
+async function executeOnce<T>(
+  init: InternalInit,
+  fetchImpl: typeof fetch,
+): Promise<T> {
+  const response = await fetchImpl(init.url, init);
   if (!response.ok) {
     const errorBody = await safeParseBody(response);
     throw new HttpError(response.statusText, response.status, errorBody);
@@ -139,7 +160,10 @@ async function executeOnce<T>(init: InternalInit): Promise<T> {
   return parseResponse<T>(response, true);
 }
 
-async function parseResponse<T>(response: Response, parseJson: boolean): Promise<T> {
+async function parseResponse<T>(
+  response: Response,
+  parseJson: boolean,
+): Promise<T> {
   if (response.status === 204) {
     return undefined as T;
   }
@@ -168,10 +192,11 @@ async function safeParseBody(response: Response): Promise<unknown> {
 async function delayForRetry(
   attempt: number,
   policy: RetryPolicyOptions,
-  retryAfterMs: number | null = null
+  retryAfterMs: number | null = null,
 ): Promise<void> {
   const backoff = computeBackoffDelayMs(attempt, policy);
-  const waitMs = retryAfterMs !== null ? Math.max(retryAfterMs, backoff) : backoff;
+  const waitMs =
+    retryAfterMs !== null ? Math.max(retryAfterMs, backoff) : backoff;
   await new Promise((resolve) => setTimeout(resolve, waitMs));
 }
 

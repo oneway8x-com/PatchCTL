@@ -301,3 +301,6 @@ export const EVENT_NAMES = {
 export * from "./common/customization/custom-field";
 export * from "./common/customization/custom-attributes";
 export * from "./patches/patches.schema";
+export * from "./patches/content-schema";
+export * from "./patches/patchctl-api.schema";
+export * from "./patches/local-patches.schema";

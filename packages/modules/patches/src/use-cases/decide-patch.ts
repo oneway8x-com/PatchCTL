@@ -1,17 +1,11 @@
-import { z } from "zod";
+import { PatchDecisionInputSchema as decisionInput } from "@corely/contracts";
 import { authorize, type Actor } from "../access";
 import type { PatchDecisionRepository } from "../patch";
 import type { SourceRepository } from "../source";
 import { fingerprint } from "../content-schema";
 import { PatchError } from "../patch.errors";
 import { getPatch } from "./get-patch";
-export const decisionInput = z
-  .object({
-    revision: z.string().regex(/^[a-f0-9]{64}$/),
-    decision: z.enum(["approved", "rejected"]),
-    reason: z.string().trim().max(1000).optional(),
-  })
-  .strict();
+export { decisionInput };
 export async function decidePatch(
   input: unknown,
   actor: Actor,

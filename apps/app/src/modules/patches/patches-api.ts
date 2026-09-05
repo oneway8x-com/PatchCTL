@@ -1,33 +1,13 @@
-import { request } from "@corely/api-client";
+"use client";
+import { createPatchctlClient } from "@corely/api-client/patchctl";
 import { LocalStorageAdapter } from "@corely/auth-client/adapters/web";
-import type { Actor, Patch } from "@corely/modules-patches";
-export async function patchRequest<T>(
-  path: string,
-  method = "GET",
-  body?: unknown,
-): Promise<T> {
-  return request<T>({
-    url: `/api/patchctl${path}`,
-    method,
-    body,
-    accessToken: await new LocalStorageAdapter().getAccessToken(),
-    retry: { maxAttempts: 1 },
-  });
-}
-export type PatchSummary = {
-  id: string;
-  state: string;
-  sourceId: string;
-  reason: string;
-  affectedRecords: number;
-  creator: Patch["payload"]["creator"];
-  createdAt: string;
-};
-export type PatchList = { items: PatchSummary[]; nextCursor: string | null };
-export const fetchActor = () => patchRequest<Actor>("/me");
-export const fetchPatch = (id: string) =>
-  patchRequest<Patch>(`/patches/${encodeURIComponent(id)}`);
+
+// No token is cached in this client. Read the active browser credential for each call.
+export const patchClient = createPatchctlClient({
+  baseUrl: "",
+  getAccessToken: () => new LocalStorageAdapter().getAccessToken(),
+});
+export const fetchActor = () => patchClient.actor();
+export const fetchPatch = (id: string) => patchClient.patch(id);
 export const fetchPatches = (after: string | null) =>
-  patchRequest<PatchList>(
-    `/patches?limit=20${after ? `&after=${encodeURIComponent(after)}` : ""}`,
-  );
+  patchClient.patches({ limit: 20, ...(after ? { after } : {}) });

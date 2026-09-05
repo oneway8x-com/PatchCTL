@@ -1,5 +1,10 @@
 # Corely Architecture
 
+> Legacy boilerplate reference. For the current PatchCTL CLI/API/web/database relationships,
+> read [PatchCTL communication architecture](patchctl-communication.md). That document separates
+> the local-first migration from the legacy server-connected model and records incomplete steps.
+> This historical document is not a requirement to introduce full DDD layers or removed domains.
+
 **Version:** 2.0  
 **Date:** 2026-04-06
 

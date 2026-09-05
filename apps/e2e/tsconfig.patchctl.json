@@ -8,6 +8,7 @@
   "include": [
     "playwright.patchctl.config.ts",
     "playwright.patchctl-demo.config.ts",
+    "playwright.patchctl-local.config.ts",
     "tests/patchctl/**/*.ts"
   ]
 }

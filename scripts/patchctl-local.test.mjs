@@ -4,11 +4,105 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
+  copyFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import {
   localDatabaseEnv,
   localDatabaseUrl,
   resolveLocalSessionPath,
   validateLocalSession,
 } from "./patchctl-local-config.mjs";
+
+test("local agent launches apps/cli and forwards help and stdin validation", async () => {
+  const fixture = await mkdtemp(resolve(tmpdir(), "patchctl-launcher-"));
+  try {
+    await mkdir(resolve(fixture, "scripts"));
+    await mkdir(resolve(fixture, "apps/cli/dist"), { recursive: true });
+    await mkdir(resolve(fixture, ".patchctl-demo"));
+    for (const script of ["patchctl-local.mjs", "patchctl-local-config.mjs"])
+      await copyFile(
+        new URL(script, import.meta.url),
+        resolve(fixture, "scripts", script),
+      );
+    // Copy all compiled modules: symlinking the entrypoint changes its main-module identity.
+    await cp(
+      new URL("../apps/cli/dist/", import.meta.url),
+      resolve(fixture, "apps/cli/dist"),
+      { recursive: true },
+    );
+    await copyFile(
+      new URL("../apps/cli/package.json", import.meta.url),
+      resolve(fixture, "apps/cli/package.json"),
+    );
+    // Reuse installed dependencies without requiring an install in the disposable fixture.
+    await symlink(
+      fileURLToPath(new URL("../apps/cli/node_modules", import.meta.url)),
+      resolve(fixture, "apps/cli/node_modules"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    await writeFile(
+      resolve(fixture, ".patchctl-demo/local.json"),
+      JSON.stringify({ sessionPath: ".patchctl-demo/session.json" }),
+    );
+    await writeFile(
+      resolve(fixture, ".patchctl-demo/session.json"),
+      JSON.stringify({
+        url: localDatabaseUrl,
+        tenantId: "tenant",
+        userId: "user",
+        sourceId: "source",
+        jwtSecret: "unused-fixture-secret",
+        agentToken: "unused-fixture-agent",
+        humanToken: "unused-fixture-human",
+      }),
+    );
+    const invoke = (args, input) =>
+      spawnSync(
+        process.execPath,
+        [resolve(fixture, "scripts/patchctl-local.mjs"), "agent", ...args],
+        {
+          cwd: tmpdir(), // The launcher must resolve its own root, not the caller's cwd.
+          input,
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 10000,
+        },
+      );
+    const help = invoke(["--", "--help"]);
+    assert.equal(help.status, 0, help.stderr);
+    assert.match(
+      help.stdout,
+      /patchctl.*prepare content changes for human review/,
+    );
+    const validation = invoke(
+      ["validate", "--stdin"],
+      JSON.stringify({
+        sourceId: "e1bf2bb3-d983-4a69-b387-1f93124c1a24",
+        schemaVersion: "a".repeat(64),
+        reason: "Fix typo",
+        records: [
+          { id: "1", version: "b".repeat(32), changes: { title: "Fixed" } },
+        ],
+      }),
+    );
+    assert.equal(validation.status, 0, validation.stderr);
+    assert.deepEqual(JSON.parse(validation.stdout), {
+      valid: true,
+      validation: "local-structure-only",
+      affectedRecords: 1,
+    });
+    assert.equal(validation.stderr, "");
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
 
 test("demo server rejects unsafe ports before reading credentials or starting Next", () => {
   for (const port of ["0", "80", "65536", "3109x", ""]) {

@@ -1,14 +1,39 @@
 #!/usr/bin/env node
 import { readFile, stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { localCommands, runLocal } from "./local/commands.js";
+import { configDirectory, readConfig } from "./local/config.js";
+import { runPatchCommand } from "./local/patch-commands.js";
+import { runServerCommand } from "./local/server-commands.js";
 import {
   PatchProposalInputSchema,
   ContentQueryInputSchema,
 } from "@corely/contracts";
+import {
+  createPatchctlClient,
+  PatchctlClientError,
+} from "@corely/api-client/patchctl";
 
 const help = `patchctl — prepare content changes for human review
 
 Commands:
+  connect [--tenant NAME]
+  init --resources public.articles --columns id,title
+  resources
+  schema [RESOURCE]
+  list RESOURCE [--limit 20]
+  get RESOURCE ID
+  agent-guide
+  patch start [--title TITLE]
+  patch status
+  update RESOURCE ID --set field=value [--dry-run]
+  diff
+  validate
+  login --server ORIGIN
+  submit
+  sync
+
+Legacy server commands (schema uses local configuration when connected):
   sources
   schema SOURCE_ID
   targets SOURCE_ID FIELD [--after ID]
@@ -18,21 +43,46 @@ Commands:
   status PATCH_ID
   history PATCH_ID [--after EVENT_ID]
 
-All results are JSON (--json is also accepted). validate checks local structure only;
-propose also verifies the live schema, permissions, record versions and values.
+All results are JSON (--json is also accepted). Local validate checks the active draft
+against PostgreSQL. Legacy validate --file/--stdin checks local structure only;
+legacy propose also verifies the server-side schema, permissions and record values.
 Set PATCHCTL_URL to the service origin and PATCHCTL_TOKEN to a scoped agent key.
 Source content changes only after human review in the returned review URL.
 `;
 class CliError extends Error {
-  constructor(message, exitCode = 2, code = "INVALID_INPUT") {
+  constructor(
+    message: string,
+    public readonly exitCode = 2,
+    public readonly code = "INVALID_INPUT",
+  ) {
     super(message);
-    this.exitCode = exitCode;
-    this.code = code;
   }
 }
-function parse(args) {
-  const positionals = [],
-    options = {};
+type Options = {
+  json?: boolean;
+  stdin?: boolean;
+  help?: boolean;
+  file?: string;
+  after?: string;
+  limit?: string;
+};
+type InputStream = AsyncIterable<string | Uint8Array>;
+type OutputStream = { write(text: string): unknown };
+type RunOptions = {
+  env?: NodeJS.ProcessEnv;
+  stdin?: InputStream;
+  stdout?: OutputStream;
+  stderr?: OutputStream;
+  fetchImpl?: typeof fetch;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parse(args: string[]) {
+  const positionals: string[] = [];
+  const options: Options = {};
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (!arg.startsWith("--")) {
@@ -40,12 +90,12 @@ function parse(args) {
       continue;
     }
     const key = arg.slice(2);
-    if (["json", "stdin", "help"].includes(key)) {
+    if (key === "json" || key === "stdin" || key === "help") {
       options[key] = true;
       continue;
     }
     if (
-      !["file", "after", "limit"].includes(key) ||
+      (key !== "file" && key !== "after" && key !== "limit") ||
       !args[i + 1] ||
       args[i + 1].startsWith("--")
     )
@@ -57,7 +107,10 @@ function parse(args) {
     throw new CliError("Use --file or --stdin, not both.");
   return { positionals, options };
 }
-async function inputJSON(options, stdin) {
+async function inputJSON(
+  options: Options,
+  stdin: InputStream,
+): Promise<unknown> {
   let text = "";
   if (options.file) {
     if ((await stat(options.file)).size > 2_000_000)
@@ -65,9 +118,9 @@ async function inputJSON(options, stdin) {
     text = await readFile(options.file, "utf8");
   } else if (options.stdin) {
     let bytes = 0;
-    const chunks = [];
+    const chunks: Uint8Array[] = [];
     for await (const chunk of stdin) {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const buffer = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
       bytes += buffer.length;
       if (bytes > 2_000_000) throw new CliError("Input exceeds 2 MB.");
       chunks.push(buffer);
@@ -81,16 +134,32 @@ async function inputJSON(options, stdin) {
   }
 }
 export async function run(
-  args,
+  args: string[],
   {
     env = process.env,
     stdin = process.stdin,
     stdout = process.stdout,
     stderr = process.stderr,
     fetchImpl = fetch,
-  } = {},
-) {
+  }: RunOptions = {},
+): Promise<number> {
   try {
+    if (!args.includes("--help") && ["login", "submit", "sync"].includes(args[0])) return runServerCommand(args, { env, stdout, stderr });
+    if (
+      !args.includes("--help") &&
+      (["patch", "update", "diff"].includes(args[0]) ||
+        (args[0] === "validate" &&
+          !args.includes("--file") &&
+          !args.includes("--stdin")))
+    )
+      return runPatchCommand(args, { env, stdout, stderr });
+    if (
+      !args.includes("--help") &&
+      (localCommands.includes(args[0]) ||
+        (args[0] === "schema" &&
+          Boolean((await readConfig(configDirectory(env))).currentTenant)))
+    )
+      return runLocal(args, { env, stdout, stderr });
     const { positionals, options } = parse(args);
     const [command, id, field] = positionals;
     if (!command || options.help) {
@@ -128,15 +197,17 @@ export async function run(
       throw new CliError(
         "Pagination options are not supported for this command.",
       );
-    let body;
+    let body: unknown;
     if (["validate", "propose", "read"].includes(command)) {
       if (command !== "read" && !options.file && !options.stdin)
         throw new CliError("Provide a proposal with --file or --stdin.");
       body = await inputJSON(options, stdin);
+      if (command === "read" && !isRecord(body))
+        throw new CliError("Read query must be a JSON object.");
       const parsed =
         command === "read"
           ? ContentQueryInputSchema.safeParse({
-              ...body,
+              ...(isRecord(body) ? body : {}),
               ...(options.after ? { after: options.after } : {}),
               ...(options.limit ? { limit: Number(options.limit) } : {}),
             })
@@ -164,88 +235,66 @@ export async function run(
         3,
         "AUTH_CONFIGURATION",
       );
-    const base = new URL(env.PATCHCTL_URL);
-    if (
-      (base.protocol !== "https:" &&
-        !(
-          base.protocol === "http:" &&
-          ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)
-        )) ||
-      base.username ||
-      base.password ||
-      base.pathname !== "/" ||
-      base.search ||
-      base.hash
-    )
-      throw new CliError(
-        "PATCHCTL_URL must be an HTTPS origin (HTTP is allowed on loopback for development).",
-      );
-    let path = "/sources",
-      method = "GET";
-    if (command === "schema")
-      path = `/sources/${encodeURIComponent(id)}/schema`;
-    if (command === "targets")
-      path = `/sources/${encodeURIComponent(id)}/relations/${encodeURIComponent(field)}${options.after ? `?after=${encodeURIComponent(options.after)}` : ""}`;
-    if (command === "read") {
-      path = `/sources/${encodeURIComponent(id)}/records/query`;
-      method = "POST";
-    }
-    if (command === "propose") {
-      path = "/patches";
-      method = "POST";
-    }
-    if (command === "status") path = `/patches/${encodeURIComponent(id)}`;
-    if (command === "history")
-      path = `/patches/${encodeURIComponent(id)}/history${options.after ? `?after=${encodeURIComponent(options.after)}` : ""}`;
-    let response;
-    try {
-      response = await fetchImpl(new URL(`/api/patchctl${path}`, base), {
-        method,
-        redirect: "error",
-        headers: {
-          Authorization: `Bearer ${env.PATCHCTL_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        signal: AbortSignal.timeout(30000),
-      });
-    } catch {
-      throw new CliError(
-        "API request failed or timed out. No automatic retry was attempted.",
-        5,
-        "NETWORK_ERROR",
-      );
-    }
-    const result = await response.json().catch(() => {
-      throw new CliError("API returned invalid JSON.", 5, "INVALID_RESPONSE");
+    const client = createPatchctlClient({
+      baseUrl: env.PATCHCTL_URL,
+      getAccessToken: () => env.PATCHCTL_TOKEN,
+      fetch: fetchImpl,
     });
-    if (!response.ok)
-      throw new CliError(
-        result.detail ?? `API returned HTTP ${response.status}.`,
-        response.status === 401 || response.status === 403
-          ? 3
-          : response.status === 409
-            ? 4
-            : 5,
-        result.code ?? "API_ERROR",
-      );
-    if (command === "propose" && result.reviewPath)
-      result.reviewUrl = new URL(result.reviewPath, base).href;
+    let result: unknown;
+    switch (command) {
+      case "sources":
+        result = await client.sources();
+        break;
+      case "schema":
+        result = await client.schema(id);
+        break;
+      case "targets":
+        result = await client.targets(id, field, options.after);
+        break;
+      case "read":
+        result = await client.read(id, ContentQueryInputSchema.parse(body));
+        break;
+      case "propose":
+        result = await client.propose(PatchProposalInputSchema.parse(body));
+        break;
+      case "status":
+        result = await client.patch(id);
+        break;
+      case "history":
+        result = await client.history(id, { after: options.after });
+        break;
+    }
     stdout.write(JSON.stringify(result) + "\n");
     return 0;
   } catch (error) {
-    const known = error instanceof CliError;
+    const failure =
+      error instanceof PatchctlClientError
+        ? new CliError(
+            error.message,
+            error.status === 401 ||
+              error.status === 403 ||
+              error.code === "AUTH_CONFIGURATION"
+              ? 3
+              : error.status === 409
+                ? 4
+                : error.code === "INVALID_INPUT"
+                  ? 2
+                  : 5,
+            error.code,
+          )
+        : error;
+    const known = failure instanceof CliError;
     stderr.write(
       JSON.stringify({
         error: {
-          code: known ? error.code : "INPUT_ERROR",
+          code: known ? failure.code : "INPUT_ERROR",
           message: known
-            ? error.message
+            ? failure.message
             : "Could not read input or configuration.",
         },
       }) + "\n",
     );
-    return known ? error.exitCode : 2;
+    return known ? failure.exitCode : 2;
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

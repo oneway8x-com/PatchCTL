@@ -23,6 +23,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
       PATCHCTL_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
+      PATCHCTL_LOCAL_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -36,10 +37,12 @@ jobs:
       - run: pnpm --filter @corely/data exec prisma validate
       - run: pnpm --filter @corely/data exec prisma migrate deploy
       - run: pnpm build:packages
+      - run: pnpm --filter patchctl build
       - run: pnpm typecheck
       - run: pnpm --filter @corely/e2e exec tsc -p tsconfig.patchctl.json
       - run: pnpm arch:check
       - run: pnpm test
+      - run: pnpm --filter @corely/api-client test:node
       - run: pnpm --filter patchctl test
       - run: pnpm local:test
       - run: pnpm --filter @corely/e2e exec playwright install --with-deps chromium

@@ -23,7 +23,7 @@ uses the existing development OTP flow; no Resend account or email delivery is r
 - Separate Compose project `patchctl-local`, using [docker-compose.patchctl.yml](../docker-compose.patchctl.yml).
 - Postgres bound only to `127.0.0.1:55438`, database `patchctl_demo`, with a persistent named volume.
   The Compose username/password are public **local-only** defaults, not production secrets.
-- Metadata migrations, generated Prisma client, and built internal packages.
+- Metadata migrations, generated Prisma client, built internal packages, and the compiled TypeScript CLI.
 - A new demo Tenant, reviewer, read/propose-only agent, configured article source and receipt table.
 - Ten articles with missing English summaries, one populated control, and one other-Tenant control.
   Existing [demo schema and safety rules](patchctl-demo.md) apply.
@@ -39,6 +39,12 @@ run setup again for a fresh agent/demo and sign out/in with the newly printed em
 login uses the app's OTP flow, not a hardcoded token or new authentication bypass.
 
 ## Use the agent CLI
+
+The CLI source lives in `apps/cli/src/cli.ts`; setup builds its executable at `apps/cli/dist/cli.js`.
+After changing CLI source, run `pnpm --filter patchctl build` before invoking it again.
+After changing shared contracts or API-client source, run `pnpm build:packages` first;
+both the CLI and browser consume the API client's compiled exports.
+See [CLI usage](../apps/cli/README.md) for running it without the local helper.
 
 In another terminal:
 
