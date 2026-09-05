@@ -4,17 +4,30 @@
   "version": "0.0.0",
   "license": "AGPL-3.0-only",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./patchctl": {
+      "types": "./dist/patchctl.d.ts",
+      "import": "./dist/patchctl.js"
+    }
   },
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "test:node": "node --test node.check.mjs"
   },
   "dependencies": {
     "@corely/contracts": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
     "vitest": "catalog:",
     "@corely/tsconfig": "workspace:*"
   },

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { PatchApplyInputSchema } from "@corely/contracts";
 import { authorize, type Actor } from "../access";
 import type { ContentWriter, PatchApplyRepository } from "../apply";
 import type { SourceRepository, SourceSecrets } from "../source";
@@ -18,10 +18,7 @@ export async function applyPatch(
   writer: ContentWriter,
 ) {
   authorize(actor, "apply");
-  const { revision } = z
-    .object({ revision: z.string().regex(/^[a-f0-9]{64}$/) })
-    .strict()
-    .parse(input);
+  const { revision } = PatchApplyInputSchema.parse(input);
   const patch = await getPatch(actor, id, patches, sources);
   if (
     patch.revision !== revision ||

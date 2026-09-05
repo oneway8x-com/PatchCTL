@@ -41,6 +41,7 @@ jobs:
       - run: pnpm --filter @corely/e2e exec tsc -p tsconfig.patchctl.json
       - run: pnpm arch:check
       - run: pnpm test
+      - run: pnpm --filter @corely/api-client test:node
       - run: pnpm --filter patchctl test
       - run: pnpm local:test
       - run: pnpm --filter @corely/e2e exec playwright install --with-deps chromium

@@ -1,7 +1,7 @@
 import { isProblemDetails } from "@corely/contracts";
 import type { ProblemDetails } from "@corely/contracts";
-import { HttpError } from "../http/request";
-import { ApiError } from "./api-error";
+import { HttpError } from "../http/request.js";
+import { ApiError } from "./api-error.js";
 
 type ApiErrorOptions = ConstructorParameters<typeof ApiError>[0];
 
@@ -45,7 +45,10 @@ export function normalizeError(error: unknown): ApiError {
 /**
  * Convert ProblemDetails to ApiError
  */
-function problemDetailsToApiError(pd: ProblemDetails, originalError: HttpError): ApiError {
+function problemDetailsToApiError(
+  pd: ProblemDetails,
+  originalError: HttpError,
+): ApiError {
   const options: ApiErrorOptions = {
     status: pd.status,
     code: pd.code,
@@ -73,7 +76,7 @@ function problemDetailsToApiError(pd: ProblemDetails, originalError: HttpError):
  */
 function legacyErrorToApiError(
   body: { error?: string; message?: string },
-  originalError: HttpError
+  originalError: HttpError,
 ): ApiError {
   const status = originalError.status ?? 500;
   return new ApiError({
@@ -131,8 +134,14 @@ function unknownErrorToApiError(error: unknown): ApiError {
 /**
  * Type guard for legacy error body format
  */
-function isLegacyErrorBody(body: unknown): body is { error?: string; message?: string } {
-  return typeof body === "object" && body !== null && ("error" in body || "message" in body);
+function isLegacyErrorBody(
+  body: unknown,
+): body is { error?: string; message?: string } {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    ("error" in body || "message" in body)
+  );
 }
 
 /**

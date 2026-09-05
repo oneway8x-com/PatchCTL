@@ -1,5 +1,9 @@
-import type { ProblemDetails, ValidationErrorItem, isProblemDetails } from "@corely/contracts";
-import { type HttpError } from "../http/request";
+import type {
+  ProblemDetails,
+  ValidationErrorItem,
+  isProblemDetails,
+} from "@corely/contracts";
+import { type HttpError } from "../http/request.js";
 
 /**
  * Structured API error that wraps HTTP errors with ProblemDetails support
@@ -66,7 +70,11 @@ export class ApiError extends Error {
    * Check if this is a validation error
    */
   isValidationError(): boolean {
-    return this.status === 400 && !!this.validationErrors && this.validationErrors.length > 0;
+    return (
+      this.status === 400 &&
+      !!this.validationErrors &&
+      this.validationErrors.length > 0
+    );
   }
 
   /**
@@ -108,6 +116,11 @@ export class ApiError extends Error {
    * Check if this error might be retryable
    */
   isRetryable(): boolean {
-    return this.isNetworkError || this.status === 503 || this.status === 502 || this.status === 504;
+    return (
+      this.isNetworkError ||
+      this.status === 503 ||
+      this.status === 502 ||
+      this.status === 504
+    );
   }
 }

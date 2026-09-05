@@ -1,2 +1,2 @@
-export * from "./api-error";
-export * from "./normalize-error";
+export * from "./api-error.js";
+export * from "./normalize-error.js";
