@@ -1,0 +1,1 @@
+Build note (AI-assisted): At 4fdbf2c, PatchCTL source supports local PostgreSQL reads with explicit columns, drafts/diffs/validation, immutable proposal submission, and browser human approval. Local sync/apply is not implemented. Not a release or test-pass claim.

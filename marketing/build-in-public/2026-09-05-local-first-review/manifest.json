@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "updateId": "2026-09-05-local-first-review",
+  "timestamp": "2026-09-05T15:26:56Z",
+  "editorialState": "draft",
+  "sourceRevision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1",
+  "evidence": [
+    {
+      "id": "commit-4fdbf2c",
+      "kind": "commit",
+      "status": "verified",
+      "description": "Clean main source revision used for this review.",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1",
+      "checkedAt": "2026-09-05T15:26:56Z"
+    },
+    {
+      "id": "source-postgres-local",
+      "kind": "source",
+      "status": "verified",
+      "description": "The local PostgreSQL adapter connects to a supplied URL, discovers readable resources/schema, enforces explicit selected columns, and reads selected supported values; it does not discover hosts.",
+      "path": "packages/postgres/src/index.ts",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-drafts-diffs",
+      "kind": "source",
+      "status": "verified",
+      "description": "CLI draft storage preserves baselines and produces field-level before/after diffs.",
+      "path": "apps/cli/src/local/drafts.ts",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-draft-validation",
+      "kind": "source",
+      "status": "verified",
+      "description": "CLI patch commands prepare updates and perform point-in-time schema, snapshot, field, type, and relation validation.",
+      "path": "apps/cli/src/local/patch-commands.ts",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-pair-submit",
+      "kind": "source",
+      "status": "verified",
+      "description": "CLI source supports scoped-token pairing and revalidated frozen proposal submission.",
+      "path": "apps/cli/src/local/server-commands.ts",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-server-review",
+      "kind": "source",
+      "status": "verified",
+      "description": "Server use cases store immutable proposal revisions and require a human reviewer decision on the exact revision.",
+      "path": "packages/modules/patches/src/local-patches.ts",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-browser-review",
+      "kind": "source",
+      "status": "verified",
+      "description": "The browser source presents before/after values and restricts approve/reject controls to a human with review permission.",
+      "path": "apps/app/src/modules/patches/screens/LocalPatchReview.tsx",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-boundaries",
+      "kind": "source",
+      "status": "verified",
+      "description": "Architecture documentation records that local sync/execution is not implemented, approval does not apply content, selected snapshots/schema metadata leave the client while database credentials are not intentionally submitted, and legacy apply is a separate path.",
+      "path": "docs/architecture/patchctl-communication.md",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-root-private",
+      "kind": "source",
+      "status": "verified",
+      "description": "The root package manifest is private.",
+      "path": "package.json",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "source-cli-private",
+      "kind": "source",
+      "status": "verified",
+      "description": "The CLI package manifest is private.",
+      "path": "apps/cli/package.json",
+      "revision": "4fdbf2c9816acd9ec782b6933c602f00372ee0b1"
+    },
+    {
+      "id": "tests-initial-draft",
+      "kind": "test",
+      "status": "not-run",
+      "description": "No product tests were executed during initial marketing content drafting."
+    },
+    {
+      "id": "remote-ci-initial-draft",
+      "kind": "remote-ci",
+      "status": "not-run",
+      "description": "No remote CI run was executed or inspected for initial marketing content drafting."
+    },
+    {
+      "id": "release-status",
+      "kind": "release",
+      "status": "unknown",
+      "description": "No release evidence was established."
+    },
+    {
+      "id": "deployment-status",
+      "kind": "deployment",
+      "status": "unknown",
+      "description": "No deployment evidence was established."
+    },
+    {
+      "id": "adoption-status",
+      "kind": "adoption",
+      "status": "unknown",
+      "description": "No user-adoption evidence was established."
+    }
+  ],
+  "claims": [
+    {
+      "text": "At source revision 4fdbf2c, PatchCTL supports local PostgreSQL resource/schema discovery from a supplied connection, explicit selected columns, and selected-value reads.",
+      "evidenceIds": ["commit-4fdbf2c", "source-postgres-local"]
+    },
+    {
+      "text": "The inspected source supports local drafts, diffs, and point-in-time validation.",
+      "evidenceIds": ["source-drafts-diffs", "source-draft-validation"]
+    },
+    {
+      "text": "The inspected source supports scoped-token pairing, immutable proposal submission, and browser human approval of the exact revision.",
+      "evidenceIds": [
+        "source-pair-submit",
+        "source-server-review",
+        "source-browser-review"
+      ]
+    },
+    {
+      "text": "Local sync/execution is not implemented, and browser approval does not apply content.",
+      "evidenceIds": ["source-boundaries"]
+    },
+    {
+      "text": "Database URL/password are not intentionally submitted, but selected snapshots and schema metadata leave the client for review.",
+      "evidenceIds": ["source-boundaries"]
+    },
+    {
+      "text": "Legacy server-connected apply is separate and does not establish local-sync support.",
+      "evidenceIds": ["source-boundaries"]
+    },
+    {
+      "text": "The root and CLI packages are private.",
+      "evidenceIds": ["source-root-private", "source-cli-private"]
+    },
+    {
+      "text": "No product tests or remote CI were run for this initial draft, and it is not a release, deployment, or adoption claim.",
+      "evidenceIds": [
+        "tests-initial-draft",
+        "remote-ci-initial-draft",
+        "release-status",
+        "deployment-status",
+        "adoption-status"
+      ]
+    }
+  ],
+  "channels": {
+    "x": {
+      "path": "x.txt",
+      "intendedAccount": "unconfigured",
+      "destination": "timeline",
+      "options": {},
+      "blockers": [
+        "Configure and compare the intended X account.",
+        "Install the reviewed, pinned xurl v1.3.1 in the isolated publisher runtime.",
+        "Confirm X policy and billing safeguards before controlled publication.",
+        "Run offline validation, dry-run, preview, and exact human approval in the isolated publisher."
+      ]
+    },
+    "reddit": {
+      "path": "reddit.md",
+      "intendedCommunity": "unselected",
+      "rulesCheckedAt": null,
+      "blockers": [
+        "Select one named community.",
+        "Check and record that community's current rules before manual export.",
+        "Confirm affiliation and AI disclosure wording for that community."
+      ]
+    }
+  },
+  "aiAssistance": {
+    "used": true,
+    "disclosure": "Drafted with AI assistance and reviewed against repository source; human editorial approval is required before publication.",
+    "humanReviewRequired": true
+  },
+  "blockers": [
+    "Bundle remains editorialState draft.",
+    "X operator prerequisites are incomplete.",
+    "Reddit community selection and current-rules check are incomplete."
+  ]
+}

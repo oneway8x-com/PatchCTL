@@ -48,6 +48,7 @@ web_modules/
 *.tsbuildinfo
 .patchctl-results/
 .patchctl-demo/
+.patchctl-marketing/
 
 # Optional npm cache directory
 .npm

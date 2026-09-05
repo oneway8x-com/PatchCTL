@@ -60,8 +60,13 @@ and build as described in the handbook. For documentation-only changes, validate
 formatting, and skill metadata instead; explain that runtime checks were not rerun.
 Report checks as passed, failed, blocked, or not run, with evidence. Never weaken a check to pass.
 
-The [skill catalog](docs/ai/skills-management.md) describes the seven procedures in
+The [skill catalog](docs/ai/skills-management.md) describes the nine procedures in
 [`.agents/skills/`](.agents/skills). Select only the relevant skill and read it fully before use.
 Skills support this repository's rules; they do not expand task scope or require a corporate
 review/deployment process. Legacy Corely architecture documents are background, not a mandate
 to restore removed domains or layering.
+
+After a meaningful verified increment, consider the `build-in-public` skill and create or update
+at most one useful public-safe draft. A routine fix or maintenance commit may need no draft.
+Marketing is never a completion gate, and finishing code never authorizes automatic publication;
+`marketing-publish` is explicit-only and remains subject to exact human review and channel policy.

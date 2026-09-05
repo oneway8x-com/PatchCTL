@@ -9,9 +9,10 @@ clients execute.** PatchCTL does not call an LLM.
 
 The [local CLI foundation](docs/local-cli.md) currently supports secure connection
 storage, explicit resource/column selection, schema inspection, record reads,
-local drafts, updates, diffs, and validation.
-Local patch submission and `sync` are still pending. The existing server-connected
-review application below is the legacy workflow, not the completed local-first MVP.
+local drafts, updates, diffs, validation, scoped token pairing, and immutable proposal
+submission for browser human review. Local `sync`/execution is still pending: approval does
+not apply content. The existing server-connected review application below is the legacy workflow,
+not evidence that local-first execution is complete.
 
 The active architecture is:
 
@@ -98,8 +99,11 @@ for account registration, operator-assisted database setup, CLI usage, and your 
 
 For contribution and agent workflows, start with [Contributing](CONTRIBUTING.md), the
 [Engineering Handbook](docs/ENGINEERING-HANDBOOK.md), [agent instructions](AGENTS.md), and the
-[repository skill catalog](docs/ai/skills-management.md). PatchCTL is solo-maintained: local
-agent work can proceed autonomously, while live content patches still require human approval.
+[repository skill catalog](docs/ai/skills-management.md). The public
+[build-in-public archive and workflow](marketing/README.md) records evidence-backed updates,
+human review rules, and publication receipts without making marketing a development gate.
+PatchCTL is solo-maintained: local agent work can proceed autonomously, while live content
+patches and public marketing publication still require separate human approval.
 
 See the [shared CLI/browser client architecture](docs/patchctl-client.md),
 `docs/architecture/*`, and `docs/guides/*` for the current architecture reference.
