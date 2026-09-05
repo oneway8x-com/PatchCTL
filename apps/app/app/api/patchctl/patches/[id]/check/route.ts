@@ -6,6 +6,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const actor = await getPatchActor(request);
     const { patches, repository, secrets } = patchRuntime();
-    return Response.json(await checkConflicts(await request.json(), actor, (await context.params).id, patches, repository, secrets, new PostgresConflictChecker()));
+    return Response.json(await checkConflicts(await readPatchJson(request), actor, (await context.params).id, patches, repository, secrets, new PostgresConflictChecker()));
   } catch (error) { return patchProblem(error); }
 }
+import { readPatchJson } from "@corely/modules-patches";

@@ -24,3 +24,4 @@ export * from "./apply.postgres";
 export * from "./use-cases/apply-patch";
 export * from "./audit";
 export * from "./use-cases/patch-history";
+export * from "./request-json";

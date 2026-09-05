@@ -29,7 +29,11 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
       if (!field?.editable || !field.readable) throw new PatchError(400, "FIELD_NOT_EDITABLE", `Field ${name} is not editable.`);
       // Enum/relation write support is enabled only with its dedicated validation use case.
       if (field.type !== "text") throw new PatchError(400, "UNSUPPORTED_CHANGE", "Only text changes are currently enabled.");
-      validateTextValue(value, { nullable: field.nullable, maxLength: field.maxLength }, name);
+      try { validateTextValue(value, { nullable: field.nullable, maxLength: field.maxLength }, name); }
+      catch (error) {
+        if (error instanceof PatchError) throw new PatchError(error.status, error.code, error.message, { recordId: record.id, field: name });
+        throw error;
+      }
       const previous = snapshot.values[name];
       if (previous === undefined) throw new PatchError(409, "MISSING_FIELD", "The record no longer matches the schema.");
       if (previous === value) throw new PatchError(400, "NO_CHANGE", `Field ${name} is unchanged.`);

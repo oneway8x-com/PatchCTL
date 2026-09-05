@@ -11,6 +11,7 @@ export async function PUT(request: Request, context: Context) {
   try {
     const actor = await getPatchActor(request);
     const { repository, secrets } = sourceRuntime();
-    return Response.json(await configureSchema(await request.json(), actor, (await context.params).id, repository, secrets, new PostgresSchemaInspector()));
+    return Response.json(await configureSchema(await readPatchJson(request), actor, (await context.params).id, repository, secrets, new PostgresSchemaInspector()));
   } catch (error) { return patchProblem(error); }
 }
+import { readPatchJson } from "@corely/modules-patches";

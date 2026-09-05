@@ -10,6 +10,7 @@ export async function POST(request: Request) {
   try {
     const actor = await getPatchActor(request);
     const { repository, secrets, reader, patches } = patchRuntime();
-    return Response.json(await preparePatch(await request.json(), actor, repository, secrets, reader, patches), { status: 201 });
+    return Response.json(await preparePatch(await readPatchJson(request), actor, repository, secrets, reader, patches), { status: 201 });
   } catch (error) { return patchProblem(error); }
 }
+import { readPatchJson } from "@corely/modules-patches";
