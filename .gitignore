@@ -47,6 +47,7 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 .patchctl-results/
+.patchctl-demo/
 
 # Optional npm cache directory
 .npm
