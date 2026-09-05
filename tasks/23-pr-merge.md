@@ -22,7 +22,14 @@ local-first release. Human approval in the new flow must leave the user database
   full compiled directory. All five checks passed after that fixture correction.
 - Local submission/human-review browser scenario passed, including denied agent approval and
   unchanged target content after human approval.
-- Legacy browser regressions and final production build are in progress.
+- Legacy mocked browser regressions: eight passed. The real CLI/browser/Postgres demo also
+  passed, covering ten English summaries, approval/apply, rejection, and conflicting edits.
+- Repeated the local submission/review scenario and visually inspected its screenshot:
+  before/after values, record count, human approval controls, and audit history are readable.
+- Final `pnpm build` passed (internal packages, CLI, and Next.js production build).
+- Self-review and architecture checks passed for this incremental scope. Native keyring
+  coverage on macOS/Linux and a standalone lint configuration remain outstanding; no completed
+  local execution, server-verified execution proof, or live deployment is claimed.
 
 ## External limitation
 
