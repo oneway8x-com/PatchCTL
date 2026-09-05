@@ -21,7 +21,7 @@ export function PatchDetail({ id }: { id: string }) {
   const query = useQuery({ queryKey: ["patch", ...scope, id], queryFn: () => fetchPatch(id), enabled: !auth.isLoading && auth.isAuthenticated, retry: false });
   const actorQuery = useQuery({ queryKey: ["patch-actor", ...scope], queryFn: fetchActor, enabled: !auth.isLoading && auth.isAuthenticated, retry: false });
   const schemaQuery = useQuery({ queryKey: ["patch-schema", ...scope, query.data?.payload.sourceId],
-    queryFn: () => patchRequest<{ definition: { table: string; fields: Record<string, { locale?: string }> } }>(`/sources/${query.data!.payload.sourceId}/schema`),
+    queryFn: () => patchRequest<{ definition: { table: string; fields: Record<string, { locale?: string; type?: string }> } }>(`/sources/${query.data!.payload.sourceId}/schema`),
     enabled: !!query.data, retry: false });
   if (auth.isLoading || query.isLoading) return <p role="status">Loading patch…</p>;
   if (!auth.isAuthenticated) return <p><Link className="underline" href="/login">Sign in</Link> to review this patch.</p>;
@@ -68,6 +68,7 @@ export function PatchDetail({ id }: { id: string }) {
       <h2 className="border-b bg-muted/50 p-4 font-semibold">Record {record.id}</h2>
       {Object.keys(record.after).map(field => <div key={field} className="border-b last:border-0">
         <h3 className="px-4 pt-4 font-medium">{field}{schemaQuery.data?.definition.fields[field]?.locale ? ` (${schemaQuery.data.definition.fields[field].locale})` : ""}</h3>
+        {schemaQuery.data?.definition.fields[field]?.type === "timestamp" && <p className="px-4 pt-2 text-sm">Schedule instant · UTC (Z). Activation is handled by the consuming application.</p>}
         <div className="grid gap-4 p-4 md:grid-cols-2"><div className="rounded-lg bg-red-50 p-4 text-slate-900"><p className="mb-2 text-xs font-bold uppercase">Before</p><Value value={record.before[field]}/></div>
           <div className="rounded-lg bg-emerald-50 p-4 text-slate-900"><p className="mb-2 text-xs font-bold uppercase">After</p><Value value={record.after[field]}/></div></div>
         {record.relations?.[field] && <p className="px-4 pb-4 text-sm">Relation labels at preparation: {record.relations[field].before?.label ?? "Unavailable / none"} → {record.relations[field].after?.label ?? "None"}. Stable IDs are shown above.</p>}

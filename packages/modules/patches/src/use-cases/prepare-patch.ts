@@ -8,6 +8,7 @@ import { PatchError } from "../patch.errors";
 import { requireSource } from "./sources";
 import { validateFieldValue, type RelationReader } from "../assignment";
 import { isMissingText } from "../missing-text";
+import { normalizeTimestamp, validateSchedules } from "../scheduling";
 
 export async function preparePatch(input: unknown, actor: Actor, sources: SourceRepository, secrets: SourceSecrets, reader: ContentReader, patches: PatchRepository, relations?: RelationReader) {
   authorize(actor, "propose");
@@ -33,9 +34,11 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
     if (parsed.translation && (isMissingText(snapshot.values[parsed.translation.sourceField]) || typeof snapshot.values[parsed.translation.sourceField] !== "string" || Object.keys(record.changes).some(name => name !== parsed.translation!.targetField)))
       throw new PatchError(400, "INVALID_TRANSLATION", "Supply source text and change only the target locale.", { recordId: record.id });
     const before: Record<string, ChangeValue> = {};
-    for (const [name, value] of Object.entries(record.changes)) {
+    for (const [name, suppliedValue] of Object.entries(record.changes)) {
       const field = Object.hasOwn(schema.definition.fields, name) ? schema.definition.fields[name] : undefined;
       if (!field?.editable || !field.readable) throw new PatchError(400, "FIELD_NOT_EDITABLE", `Field ${name} is not editable.`);
+      const value = field.type === "timestamp" ? normalizeTimestamp(suppliedValue, field.nullable, name) : suppliedValue;
+      record.changes[name] = value;
       if (parsed.mode === "fill-missing" && field.type !== "text") throw new PatchError(400, "UNSUPPORTED_CHANGE", "Fill-missing requires text fields.");
       try { validateFieldValue(value, field, name); }
       catch (error) {
@@ -49,6 +52,8 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
       if (previous === value) throw new PatchError(400, "NO_CHANGE", `Field ${name} is unchanged.`);
       before[name] = previous;
     }
+    try { validateSchedules(schema.definition, snapshot.values, record.changes); }
+    catch (error) { if (error instanceof PatchError) throw new PatchError(error.status, error.code, error.message, { recordId: record.id }); throw error; }
     records.push({ id: record.id, version: record.version, before, after: record.changes });
   }
   for (const [name, field] of Object.entries(schema.definition.fields)) {

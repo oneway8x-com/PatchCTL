@@ -7,6 +7,7 @@ import { sourcePool } from "./postgres";
 import { PatchError } from "./patch.errors";
 import type { Patch } from "./patch";
 import { validateRelationTargets } from "./assignment.postgres";
+import { validateSchedules } from "./scheduling";
 
 export class PostgresContentWriter implements ContentWriter {
   async apply(url: string, schema: RegisteredSchema, patch: Patch, actor: Actor): Promise<ApplyReceipt> {
@@ -24,7 +25,8 @@ export class PostgresContentWriter implements ContentWriter {
         await client.query("ROLLBACK");
         return receipt;
       }
-      await lockAndValidateRecords(client, schema, patch.tenantId, patch.payload.records);
+      const current = await lockAndValidateRecords(client, schema, patch.tenantId, patch.payload.records);
+      for (const record of patch.payload.records) validateSchedules(schema.definition, current.find(row => row.id === record.id)!.values, record.after);
       await validateRelationTargets(client, schema, patch.tenantId, patch.payload.records);
       for (const record of patch.payload.records) {
         const values: unknown[] = [];

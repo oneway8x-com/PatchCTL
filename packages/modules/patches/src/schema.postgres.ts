@@ -27,6 +27,7 @@ export async function inspectSchema(client: PoolClient, schema: ContentSchema): 
       (field.nullable && column.required) ||
       (field.type === "text" && !["text", "varchar", "bpchar"].includes(column.type)) ||
       (field.type === "enum" && column.kind !== "e" && !["text", "varchar"].includes(column.type)) ||
+      (field.type === "timestamp" && (column.type !== "timestamptz" || column.modifier < 0 || column.modifier > 3)) ||
       (field.type === "relation" && !["text", "varchar", "uuid", "int4", "int8"].includes(column.type))) {
       throw new PatchError(400, "INVALID_SCHEMA", `Field ${name} does not match the database schema.`);
     }
@@ -53,7 +54,7 @@ export async function inspectSchema(client: PoolClient, schema: ContentSchema): 
       AND a.attname=$3 AND b.attname=$4 AND c.convalidated`, [table, tableName(target), name, target.key]);
     if (!foreignKey.rowCount) throw new PatchError(400, "INVALID_SCHEMA", `Field ${name} requires a validated single-column foreign key to its target.`);
     relations[name] = await inspectSchema(client, { namespace: target.namespace, table: target.table, key: target.key,
-      isolation: { mode: "row", tenantColumn: target.tenantColumn }, fields: { [target.label]: { type: "text", readable: true, editable: false, nullable: false, maxLength: 10000 } } });
+      isolation: { mode: "row", tenantColumn: target.tenantColumn }, schedules: [], fields: { [target.label]: { type: "text", readable: true, editable: false, nullable: false, maxLength: 10000 } } });
   }
   return fingerprint({ columns, constraints, primary, enumValues, relations, behavior, triggers, rules, cascadingReferences });
 }

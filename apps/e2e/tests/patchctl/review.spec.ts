@@ -51,6 +51,17 @@ test("shows a queue entry with the exact proposed record count", async ({ page }
   await expect(page.getByTestId("affected-count")).toContainText("50 records affected");
   await expect(page.getByRole("heading", { name: "Audit history" })).toBeVisible();
 });
+
+test("labels schedule instants as UTC and leaves activation to the consuming application", async ({ page }) => {
+  await page.route("**/api/patchctl/sources/source/schema", route => route.fulfill({ json: { definition: { table: "promotions", fields: { starts_at: { type: "timestamp" } } } } }));
+  await page.route(`**/api/patchctl/patches/${id}`, route => route.fulfill({ json: { id, tenantId: "tenant", revision: "a".repeat(64), state: "pending", payload: {
+    sourceId: "source", reason: "Schedule promotion", creator: { kind: "agent", id: "agent" }, createdAt: "2026-09-05T10:00:00Z",
+    records: [{ id: "1", before: { starts_at: null }, after: { starts_at: "2026-09-01T08:00:00.000Z" } }],
+  } } }));
+  await page.goto(`/patches/${id}`);
+  await expect(page.getByText("2026-09-01T08:00:00.000Z", { exact: true })).toBeVisible();
+  await expect(page.getByText("Schedule instant · UTC (Z). Activation is handled by the consuming application.")).toBeVisible();
+});
 test("distinguishes null/empty, renders content safely and paginates all records", async ({ page }) => {
   await page.goto(`/patches/${id}`);
   await expect(page.getByTestId("record-diff")).toHaveCount(10);

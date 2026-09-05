@@ -21,13 +21,14 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 15 | #17 English-summary demo | Implemented; real CLI/browser/Postgres demo passes |
 | 16 | #16 Enum/relation assignment | Implemented; 90 feature tests pass |
 | 17 | #18 Release verification | Verified locally; 151 repository tests, 9 CLI checks, 6 browser scenarios, typecheck/Prisma/build pass |
-| 18 | #19 Scheduling | In progress |
-| 19 | #20 Status transitions | Pending |
+| 18 | #19 Scheduling | Implemented; 103 feature tests pass, final browser/build checks pending |
+| 19 | #20 Status transitions | Blocked: target publishing semantics not defined |
 
 ## Blockers
 
 - 2026-09-05: GitHub Projects updates are blocked: the active CLI token has `repo` but lacks `project`. `gh project item-list 7 --owner hadoan` fails with insufficient scopes. Remedy: `gh auth refresh --hostname github.com --scopes project`. Continue implementation and issue comments; mirror status here until the board can be synchronized.
 - 2026-09-05: Optional lint execution cannot start: installed ESLint 9 has no root `eslint.config.js/mjs/cjs`. No new lint configuration is invented during feature work. Typecheck, behavior tests, Prisma validation and build remain the release gates.
+- 2026-09-05 (#20): The repository has no target application's publishing policy, permitted transition map, validation contract, or side-effect integration. The ticket explicitly requires these semantics to be confirmed before implementation. Do not expose publishing/status fields as generic editable enums as a workaround. Needed to unblock: target application/source, allowed states/transitions, required business checks, human roles and any transactional side-effect API. No publishing engine or raw-SQL status shortcut was implemented; see `docs/patchctl-publishing-blocker.md`. Continue with cumulative verification and issue handoff.
 
 ## Verification
 
