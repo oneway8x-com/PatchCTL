@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { readFile, stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { localCommands, runLocal } from "./local/commands.js";
+import { configDirectory, readConfig } from "./local/config.js";
+import { runPatchCommand } from "./local/patch-commands.js";
 import {
   PatchProposalInputSchema,
   ContentQueryInputSchema,
@@ -13,6 +16,20 @@ import {
 const help = `patchctl — prepare content changes for human review
 
 Commands:
+  connect [--tenant NAME]
+  init --resources public.articles --columns id,title
+  resources
+  schema [RESOURCE]
+  list RESOURCE [--limit 20]
+  get RESOURCE ID
+  agent-guide
+  patch start [--title TITLE]
+  patch status
+  update RESOURCE ID --set field=value [--dry-run]
+  diff
+  validate
+
+Legacy server commands (schema uses local configuration when connected):
   sources
   schema SOURCE_ID
   targets SOURCE_ID FIELD [--after ID]
@@ -22,8 +39,9 @@ Commands:
   status PATCH_ID
   history PATCH_ID [--after EVENT_ID]
 
-All results are JSON (--json is also accepted). validate checks local structure only;
-propose also verifies the live schema, permissions, record versions and values.
+All results are JSON (--json is also accepted). Local validate checks the active draft
+against PostgreSQL. Legacy validate --file/--stdin checks local structure only;
+legacy propose also verifies the server-side schema, permissions and record values.
 Set PATCHCTL_URL to the service origin and PATCHCTL_TOKEN to a scoped agent key.
 Source content changes only after human review in the returned review URL.
 `;
@@ -122,6 +140,21 @@ export async function run(
   }: RunOptions = {},
 ): Promise<number> {
   try {
+    if (
+      !args.includes("--help") &&
+      (["patch", "update", "diff"].includes(args[0]) ||
+        (args[0] === "validate" &&
+          !args.includes("--file") &&
+          !args.includes("--stdin")))
+    )
+      return runPatchCommand(args, { env, stdout, stderr });
+    if (
+      !args.includes("--help") &&
+      (localCommands.includes(args[0]) ||
+        (args[0] === "schema" &&
+          Boolean((await readConfig(configDirectory(env))).currentTenant)))
+    )
+      return runLocal(args, { env, stdout, stderr });
     const { positionals, options } = parse(args);
     const [command, id, field] = positionals;
     if (!command || options.help) {

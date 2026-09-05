@@ -1,6 +1,17 @@
-# CorelyBase
+# PatchCTL
 
-CorelyBase is now a **Next.js-first modular monolith**.
+Safe content changes for coding agents.
+
+PatchCTL is moving to a CLI-first PostgreSQL workflow: agents prepare patches,
+humans review them, and the local client applies approved changes. The intended
+principle is: **Credentials stay local. Agents propose. Humans approve. Local
+clients execute.** PatchCTL does not call an LLM.
+
+The [local CLI foundation](docs/local-cli.md) currently supports secure connection
+storage, explicit resource/column selection, schema inspection, record reads,
+local drafts, updates, diffs, and validation.
+Local patch submission and `sync` are still pending. The existing server-connected
+review application below is the legacy workflow, not the completed local-first MVP.
 
 The active architecture is:
 

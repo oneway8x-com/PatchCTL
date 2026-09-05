@@ -23,6 +23,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
       PATCHCTL_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
+      PATCHCTL_LOCAL_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4

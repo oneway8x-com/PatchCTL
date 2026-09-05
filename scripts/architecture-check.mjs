@@ -138,6 +138,14 @@ function checkPatchctlClientBoundaries() {
       if (file.endsWith(".test.ts")) continue;
       for (const spec of extractImports(fs.readFileSync(file, "utf8"))) {
         if (
+          root !== path.join(repoRoot, "apps", "cli", "src") &&
+          (spec === "@patchctl/postgres" || spec === "@napi-rs/keyring")
+        )
+          addViolation(
+            file,
+            `browser/contracts must not import local execution adapters: ${spec}`,
+          );
+        if (
           /^@corely\/(data|modules-)/.test(spec) ||
           spec.startsWith("@prisma/") ||
           spec === "pg"
