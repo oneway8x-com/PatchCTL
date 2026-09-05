@@ -13,8 +13,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 7 | #10 Review UI | Implemented; browser checks pass; actions follow in #11/#13 |
 | 8 | #11 Approval/rejection | Implemented; 53 focused/integration tests pass |
 | 9 | #12 Conflicts | Implemented; real Postgres lock/race checks pass |
-| 10 | #13 Atomic apply | In progress |
-| 11 | #14 Audit | Pending |
+| 10 | #13 Atomic apply | Implemented; rollback/idempotency/recovery tests pass |
+| 11 | #14 Audit | In progress |
 | 12 | #15 CLI | Pending |
 | 13 | #8 Bulk changes | Pending |
 | 14 | #9 Missing content/translations | Pending |
@@ -39,3 +39,4 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - #3/#4 verified against Postgres 17 in `patchctl-test-20260905`; migrations applied only to isolated `patchctl_test`. Schema checks verify the primary key, field types, Tenant column, and drift fingerprint. Patches/app typechecks pass; 28 focused/integration tests pass.
 - #10: production build passes; two Chromium checks pass for queue navigation, 50-record counts, null/empty distinction, safe HTML text rendering and pagination. Existing e2e config targets removed services; the new PatchCTL config runs against current Next.js. UI screenshot visually inspected.
 - #11/#12: four Chromium tests pass, including exact-revision approval and hiding agent controls. Focused/integration suite: 56 tests pass. Real Postgres verifies whole-record conflicts, deleted/moved records, and locks blocking concurrent updates until the final transaction releases them.
+- #13: 62 tests pass. Real Postgres confirms all-or-nothing rollback, zero writes on conflicts, concurrent apply deduplication, and recovery after target commit succeeds but metadata persistence fails. Patches/app typechecks pass. Target receipt setup is explicit operator SQL, never agent DDL.

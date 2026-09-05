@@ -31,7 +31,15 @@ export function PatchDetail({ id }: { id: string }) {
     setBusy(true); setActionError(null);
     try {
       await patchRequest(`/patches/${id}/decision`, "POST", { revision: patch.revision, decision, ...(decision === "rejected" ? { reason: rejectionReason } : {}) });
+      if (decision === "approved" && actorQuery.data?.permissions.includes("apply"))
+        await patchRequest(`/patches/${id}/apply`, "POST", { revision: patch.revision });
     } catch { setActionError("The decision could not be saved. The patch may have changed or your access may have expired. Review its current state before retrying."); }
+    finally { await query.refetch(); setBusy(false); }
+  }
+  async function apply() {
+    setBusy(true); setActionError(null);
+    try { await patchRequest(`/patches/${id}/apply`, "POST", { revision: patch.revision }); }
+    catch { setActionError("Apply did not complete. Review the current state below. For an applying patch, retry to recover its result safely."); }
     finally { await query.refetch(); setBusy(false); }
   }
   return <section className="mx-auto max-w-6xl space-y-6">
@@ -49,9 +57,10 @@ export function PatchDetail({ id }: { id: string }) {
     {actionError && <p role="alert">{actionError}</p>}
     {patch.state === "pending" && actorQuery.data?.kind === "human" && actorQuery.data.permissions.includes("review") && <div className="space-y-3 rounded-xl border p-4">
       <label className="block text-sm">Rejection reason (optional)<input className="mt-1 block w-full rounded border bg-background p-2" value={rejectionReason} maxLength={1000} onChange={event => setRejectionReason(event.target.value)}/></label>
-      <div className="flex gap-3"><button className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-40" disabled={busy} onClick={() => void decide("approved")}>Approve patch</button>
+      <div className="flex gap-3"><button className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-40" disabled={busy} onClick={() => void decide("approved")}>{actorQuery.data.permissions.includes("apply") ? "Approve and apply" : "Approve patch"}</button>
         <button className="rounded border px-4 py-2 disabled:opacity-40" disabled={busy} onClick={() => void decide("rejected")}>Reject patch</button></div>
     </div>}
+    {["approved", "applying"].includes(patch.state) && actorQuery.data?.kind === "human" && actorQuery.data.permissions.includes("apply") && <button className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-40" disabled={busy} onClick={() => void apply()}>{patch.state === "applying" ? "Recover apply result" : "Apply approved patch"}</button>}
     <div className="space-y-5">{patch.payload.records.slice(page * 10, page * 10 + 10).map(record => <article key={record.id} className="overflow-hidden rounded-xl border" data-testid="record-diff">
       <h2 className="border-b bg-muted/50 p-4 font-semibold">Record {record.id}</h2>
       {Object.keys(record.after).map(field => <div key={field} className="border-b last:border-0">

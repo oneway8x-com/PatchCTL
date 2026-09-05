@@ -7,6 +7,7 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/patchctl/**", route => {
     const url = route.request().url();
     if (url.endsWith("/decision")) state = route.request().postDataJSON().decision;
+    if (url.endsWith("/apply")) state = "applied";
     if (url.endsWith("/me")) return route.fulfill({ json: { id: "reviewer", tenantId: "tenant", kind: "human", permissions: ["read", "review", "apply"], connectionIds: null } });
     if (url.endsWith("/schema")) return route.fulfill({ json: { definition: { table: "articles", fields: { summary_en: { locale: "en" } } } } });
     if (url.includes("patches?")) return route.fulfill({ json: { items: [{ id, reason: "Add English summaries", affectedRecords: 50, state: "pending", sourceId: "source", creator: { id: "agent", kind: "agent" }, createdAt: "2026-09-05T10:00:00Z" }], nextCursor: null } });
@@ -19,16 +20,16 @@ test.beforeEach(async ({ page }) => {
 test("sends the reviewed revision and refreshes after a human decision", async ({ page }) => {
   await page.goto(`/patches/${id}`);
   const decision = page.waitForRequest(request => request.url().endsWith("/decision"));
-  await page.getByRole("button", { name: "Approve patch", exact: true }).click();
+  await page.getByRole("button", { name: "Approve and apply", exact: true }).click();
   expect((await decision).postDataJSON()).toEqual({ revision: "a".repeat(64), decision: "approved" });
-  await expect(page.getByTestId("patch-state")).toHaveText("approved");
-  await expect(page.getByRole("button", { name: "Approve patch", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("patch-state")).toHaveText("applied");
+  await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0);
 });
 test("does not expose approval to agent credentials even with claimed review permission", async ({ page }) => {
   await page.route("**/api/patchctl/me", route => route.fulfill({ json: { id: "agent", kind: "agent", permissions: ["read", "review", "apply"] } }));
   await page.goto(`/patches/${id}`);
   await expect(page.getByText("Human review is required. Agent credentials cannot approve or apply patches.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Approve patch", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0);
 });
 test("shows a queue entry with the exact proposed record count", async ({ page }) => {
   await page.goto("/patches");
