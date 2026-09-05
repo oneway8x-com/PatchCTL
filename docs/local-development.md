@@ -30,6 +30,8 @@ uses the existing development OTP flow; no Resend account or email delivery is r
 - Private session files in ignored `.patchctl-demo/`; the local pointer selects the active fixture.
   No root `.env` or existing containers/databases are overwritten. Both Prisma connection variables
   are explicitly directed at this local database before migrations.
+  The launcher also forces development-mode OTP delivery and same-origin browser API calls,
+  even if the calling shell contains production settings.
 
 Setup is additive: running it again creates a fresh isolated dataset and selects it, preserving
 older datasets and sessions. Stop the app first. Agent credentials expire one hour after setup;

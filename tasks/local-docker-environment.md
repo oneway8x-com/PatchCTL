@@ -35,9 +35,19 @@ No production deployment, remote database, GitHub mutation, or content approval 
   review access. No credential or OTP was committed or included in public output.
 - Passed: focused formatting and self-review of source paths, secret handling, isolated targets,
   and non-destructive setup/stop behavior. Ctrl+C stopped the interactive app and released 3109.
-- Pending: existing full-stack demo regression on separate test data and final handoff.
+- Passed: existing full-stack CLI/browser/Postgres demo on separate test data (one scenario,
+  41.8 seconds), including real apply, rejection and conflicts. The interactive fixture was not
+  used by that test and its ten-record proposal remains pending for human review.
+- Final self-review pins development-mode OTP and same-origin API calls despite inherited
+  production environment settings; the launcher environment regression test covers both overrides.
+- Passed: ten local documentation links/anchors. Remote CI and deployment were not run.
 
 ## Blockers and handoff
 
 None identified. Existing legacy Compose configuration is intentionally left unchanged.
 The interactive fixture contains a pending patch for later human review; no content was applied.
+Docker Postgres remains healthy on loopback 55438. The interactive app was stopped after smoke
+checks so the maintainer can run `pnpm local:start` in their own terminal and see login codes.
+Implementation commit: `24266db`; follow-up verification and environment hardening accompany
+this record. No push or production changes. The agent credential expires one hour after setup;
+human OTP login can still review the pending patch with the selected fixture.

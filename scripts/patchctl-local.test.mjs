@@ -39,6 +39,8 @@ test("local setup overrides both Prisma targets without mutating the caller", ()
   const original = {
     DATABASE_URL: "postgresql://remote/prod",
     DIRECT_DATABASE_URL: "postgresql://remote/prod",
+    NODE_ENV: "production",
+    NEXT_PUBLIC_API_BASE_URL: "https://remote.example.test",
     KEEP: "value",
   };
   const env = localDatabaseEnv(original);
@@ -46,8 +48,11 @@ test("local setup overrides both Prisma targets without mutating the caller", ()
   assert.equal(env.DIRECT_DATABASE_URL, localDatabaseUrl);
   assert.equal(env.PATCHCTL_TEST_DATABASE_URL, localDatabaseUrl);
   assert.equal(env.DOCKER_CONTAINER, "1");
+  assert.equal(env.NODE_ENV, "development");
+  assert.equal(env.NEXT_PUBLIC_API_BASE_URL, "");
   assert.equal(env.KEEP, "value");
   assert.equal(original.DATABASE_URL, "postgresql://remote/prod");
+  assert.equal(original.NODE_ENV, "production");
 });
 
 test("session pointer must remain in the private demo directory", () => {

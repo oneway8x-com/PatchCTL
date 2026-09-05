@@ -14,6 +14,8 @@ export function localDatabaseEnv(env) {
     DATABASE_URL: localDatabaseUrl,
     DIRECT_DATABASE_URL: localDatabaseUrl,
     PATCHCTL_TEST_DATABASE_URL: localDatabaseUrl,
+    NODE_ENV: "development", // Keep OTP delivery local even in a production-configured shell.
+    NEXT_PUBLIC_API_BASE_URL: "", // Keep browser API calls on the local app origin.
     DOCKER_CONTAINER: "1", // Prisma config skips ambient .env files.
     NEXT_TELEMETRY_DISABLED: "1",
   };
