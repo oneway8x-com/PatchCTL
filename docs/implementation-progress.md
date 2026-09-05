@@ -20,8 +20,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 14 | #9 Missing content/translations | Implemented; 79 feature tests plus 8 CLI checks pass |
 | 15 | #17 English-summary demo | Implemented; real CLI/browser/Postgres demo passes |
 | 16 | #16 Enum/relation assignment | Implemented; 90 feature tests pass |
-| 17 | #18 Release verification | In progress |
-| 18 | #19 Scheduling | Pending |
+| 17 | #18 Release verification | Verified locally; 151 repository tests, 9 CLI checks, 6 browser scenarios, typecheck/Prisma/build pass |
+| 18 | #19 Scheduling | In progress |
 | 19 | #20 Status transitions | Pending |
 
 ## Blockers
@@ -43,3 +43,4 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - #13: 62 tests pass. Real Postgres confirms all-or-nothing rollback, zero writes on conflicts, concurrent apply deduplication, and recovery after target commit succeeds but metadata persistence fails. Patches/app typechecks pass. Target receipt setup is explicit operator SQL, never agent DDL.
 - #14: 65 tests pass, including real Prisma membership checks, concurrent decision CAS, atomic audit/state persistence, replay deduplication, history pagination, and audit surviving source-record deletion. All new feature typechecks pass.
 - #18: root typecheck and Prisma validation now pass after correcting three Todo test query inputs. Root Vitest discovery no longer runs nested module tests twice. Plain-table safety rejects user triggers, rewrite rules, partitions, row security and cascading writes through editable referenced keys. CI now runs isolated Postgres, CLI and browser checks sequentially around builds. A local overlapping build/demo run failed because rebuilding contracts temporarily removed its output; rerun sequentially (not a product defect).
+- #18: sequential real CLI/browser/Postgres regression passed: ten missing summaries, 50-record French-to-English translation, Unicode/multiline values, one text correction plus enum/relation assignment, rejection, conflict, premature apply and revision-tamper denials. Root build passed. GitHub Projects scope was rechecked and remains unavailable; CI is configured but not claimed to have run remotely.
