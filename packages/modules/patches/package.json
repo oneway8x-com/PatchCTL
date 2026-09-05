@@ -7,5 +7,5 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "vitest run" },
   "dependencies": { "@prisma/client": "catalog:", "pg": "catalog:", "zod": "catalog:" },
-  "devDependencies": { "@corely/tsconfig": "workspace:*", "@types/node": "catalog:", "@types/pg": "catalog:", "typescript": "catalog:" }
+  "devDependencies": { "@corely/tsconfig": "workspace:*", "@prisma/adapter-pg": "catalog:", "@types/node": "catalog:", "@types/pg": "catalog:", "typescript": "catalog:" }
 }

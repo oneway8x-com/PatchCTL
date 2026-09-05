@@ -14,8 +14,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 8 | #11 Approval/rejection | Implemented; 53 focused/integration tests pass |
 | 9 | #12 Conflicts | Implemented; real Postgres lock/race checks pass |
 | 10 | #13 Atomic apply | Implemented; rollback/idempotency/recovery tests pass |
-| 11 | #14 Audit | In progress |
-| 12 | #15 CLI | Pending |
+| 11 | #14 Audit | Implemented; real persistence/audit tests pass |
+| 12 | #15 CLI | In progress |
 | 13 | #8 Bulk changes | Pending |
 | 14 | #9 Missing content/translations | Pending |
 | 15 | #17 English-summary demo | Pending |
@@ -40,3 +40,4 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - #10: production build passes; two Chromium checks pass for queue navigation, 50-record counts, null/empty distinction, safe HTML text rendering and pagination. Existing e2e config targets removed services; the new PatchCTL config runs against current Next.js. UI screenshot visually inspected.
 - #11/#12: four Chromium tests pass, including exact-revision approval and hiding agent controls. Focused/integration suite: 56 tests pass. Real Postgres verifies whole-record conflicts, deleted/moved records, and locks blocking concurrent updates until the final transaction releases them.
 - #13: 62 tests pass. Real Postgres confirms all-or-nothing rollback, zero writes on conflicts, concurrent apply deduplication, and recovery after target commit succeeds but metadata persistence fails. Patches/app typechecks pass. Target receipt setup is explicit operator SQL, never agent DDL.
+- #14: 65 tests pass, including real Prisma membership checks, concurrent decision CAS, atomic audit/state persistence, replay deduplication, history pagination, and audit surviving source-record deletion. All new feature typechecks pass.

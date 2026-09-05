@@ -27,14 +27,14 @@ export async function applyPatch(input: unknown, actor: Actor, id: string, patch
     if (!field?.editable || !field.readable || field.type !== "text") throw new PatchError(409, "POLICY_CHANGED", "A field is no longer editable.");
     validateTextValue(value, { nullable: field.nullable, maxLength: field.maxLength }, name);
   }
-  if (!await patches.claimApply(patch, source)) throw new PatchError(409, "APPLY_STATE_CHANGED", "The source or patch state changed. Refresh before retrying.");
+  if (!await patches.claimApply(patch, source, actor)) throw new PatchError(409, "APPLY_STATE_CHANGED", "The source or patch state changed. Refresh before retrying.");
   try {
     const receipt = await writer.apply(url, schema, patch, actor);
     await patches.finishApply(patch, receipt);
     return { id, state: "applied", appliedAt: receipt.appliedAt, affectedRecords: receipt.affectedRecords };
   } catch (error) {
     if (error instanceof PatchError && ["RECORD_CONFLICT", "SCHEMA_CHANGED", "INVALID_SCHEMA", "WRITE_MISMATCH", "CONSTRAINT_FAILED"].includes(error.code))
-      await patches.failApply(patch, error.code, error.code !== "CONSTRAINT_FAILED");
+      await patches.failApply(patch, error.code, error.code !== "CONSTRAINT_FAILED", actor);
     // Network/metadata errors retain applying state. A retry consults the committed target receipt.
     throw error;
   }

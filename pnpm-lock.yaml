@@ -448,6 +448,9 @@ importers:
       '@corely/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
+      '@prisma/adapter-pg':
+        specifier: 'catalog:'
+        version: 7.4.1
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.11

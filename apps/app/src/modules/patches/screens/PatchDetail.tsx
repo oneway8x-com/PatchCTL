@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth/auth-context";
 import { fetchActor, fetchPatch, patchRequest } from "../patches-api";
+import { PatchHistory } from "./PatchHistory";
 
 function Value({ value }: { value: unknown }) {
   if (value === null) return <span className="italic text-muted-foreground">Null (no value)</span>;
@@ -73,5 +74,6 @@ export function PatchDetail({ id }: { id: string }) {
       <p aria-live="polite">Records {page * 10 + 1}–{Math.min(count, page * 10 + 10)} of {count}</p>
       <button className="rounded border px-4 py-2 disabled:opacity-40" disabled={(page + 1) * 10 >= count} onClick={() => setPage(p => p + 1)}>Next records</button></div>
     {actorQuery.data?.kind === "agent" && <p>Human review is required. Agent credentials cannot approve or apply patches.</p>}
+    <PatchHistory id={id} tenantId={patch.tenantId} actorId={actorQuery.data?.id ?? ""} state={patch.state}/>
   </section>;
 }

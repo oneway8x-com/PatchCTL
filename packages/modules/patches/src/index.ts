@@ -22,3 +22,5 @@ export * from "./use-cases/check-conflicts";
 export * from "./apply";
 export * from "./apply.postgres";
 export * from "./use-cases/apply-patch";
+export * from "./audit";
+export * from "./use-cases/patch-history";

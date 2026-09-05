@@ -8,6 +8,7 @@ test.beforeEach(async ({ page }) => {
     const url = route.request().url();
     if (url.endsWith("/decision")) state = route.request().postDataJSON().decision;
     if (url.endsWith("/apply")) state = "applied";
+    if (url.endsWith("/history")) return route.fulfill({ json: { events: [{ id: "event", action: "prepared", at: "2026-09-05T10:00:00Z", actor: { id: "agent", kind: "agent" }, details: { reason: "Add English summaries" } }], nextCursor: null } });
     if (url.endsWith("/me")) return route.fulfill({ json: { id: "reviewer", tenantId: "tenant", kind: "human", permissions: ["read", "review", "apply"], connectionIds: null } });
     if (url.endsWith("/schema")) return route.fulfill({ json: { definition: { table: "articles", fields: { summary_en: { locale: "en" } } } } });
     if (url.includes("patches?")) return route.fulfill({ json: { items: [{ id, reason: "Add English summaries", affectedRecords: 50, state: "pending", sourceId: "source", creator: { id: "agent", kind: "agent" }, createdAt: "2026-09-05T10:00:00Z" }], nextCursor: null } });
@@ -37,6 +38,7 @@ test("shows a queue entry with the exact proposed record count", async ({ page }
   await expect(page.getByText("50 records · agent agent", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Add English summaries" }).click();
   await expect(page.getByTestId("affected-count")).toContainText("50 records affected");
+  await expect(page.getByRole("heading", { name: "Audit history" })).toBeVisible();
 });
 test("distinguishes null/empty, renders content safely and paginates all records", async ({ page }) => {
   await page.goto(`/patches/${id}`);
