@@ -3,6 +3,7 @@ export { PatchProposalInputSchema as proposalInput } from "@corely/contracts";
 export type ChangeValue = string | number | null;
 export type PatchRecord = { id: string; version: string; before: Record<string, ChangeValue>; after: Record<string, ChangeValue> };
 export type PatchPayload = { sourceId: string; schemaVersion: string; sourceFingerprint: string; reason: string; agentRunLabel?: string;
+  mode?: "edit" | "fill-missing"; translation?: { sourceField: string; targetField: string };
   records: PatchRecord[]; creator: Pick<Actor, "id" | "kind" | "ownerUserId">; createdAt: string };
 export type PatchState = "pending" | "approved" | "rejected" | "applying" | "applied" | "conflict" | "failed";
 export type Patch = { id: string; tenantId: string; revision: string; state: PatchState; payload: PatchPayload;

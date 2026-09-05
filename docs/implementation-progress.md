@@ -17,8 +17,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | 11 | #14 Audit | Implemented; real persistence/audit tests pass |
 | 12 | #15 CLI | Implemented; 8 CLI checks pass |
 | 13 | #8 Bulk changes | Implemented; bounded batch/stream checks pass |
-| 14 | #9 Missing content/translations | In progress |
-| 15 | #17 English-summary demo | Pending |
+| 14 | #9 Missing content/translations | Implemented; 79 feature tests plus 8 CLI checks pass |
+| 15 | #17 English-summary demo | In progress |
 | 16 | #16 Enum/relation assignment | Pending |
 | 17 | #18 Release verification | Pending |
 | 18 | #19 Scheduling | Pending |

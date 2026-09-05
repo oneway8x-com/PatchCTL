@@ -4,6 +4,7 @@ import { inspectSchema } from "./schema.postgres";
 import { PatchError } from "./patch.errors";
 import type { ContentReader, ContentQuery, ContentPage, ContentRecord } from "./content";
 import type { PoolClient } from "pg";
+import { textWhitespace } from "./missing-text";
 
 export function rowProjection(schema: ContentSchema, fields: string[]) {
   const pairs = fields.flatMap(name => [`'${q(name).slice(1, -1)}'`, `r.${q(name)}`]).join(",");
@@ -59,7 +60,8 @@ export class PostgresContentReader implements ContentReader {
     for (const filter of input.filters) {
       if (filter.op === "missing") {
         if (schema.fields[filter.field]?.type !== "text") throw new PatchError(400, "INVALID_FILTER", "Missing filters require a text field.");
-        conditions.push(`(r.${q(filter.field)} IS NULL OR r.${q(filter.field)} ~ '^[[:space:]]*$')`);
+        values.push(textWhitespace);
+        conditions.push(`(r.${q(filter.field)} IS NULL OR btrim(r.${q(filter.field)}, $${values.length}) = '')`);
       } else {
         values.push(filter.value);
         conditions.push(`r.${q(filter.field)}::text IS NOT DISTINCT FROM $${values.length}`);

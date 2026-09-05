@@ -47,6 +47,8 @@ export function PatchDetail({ id }: { id: string }) {
     <Link className="text-sm underline" href="/patches">← All patches</Link>
     <header className="space-y-3"><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">Review content changes</h1><span className="rounded-full bg-muted px-3 py-1" data-testid="patch-state">{patch.state}</span></div>
       <p className="text-lg">{patch.payload.reason}</p><p className="font-medium" data-testid="affected-count">{count} records affected · {schemaQuery.data?.definition.table ?? "Content source"}</p>
+      {patch.payload.mode === "fill-missing" && <p>Fill missing content · existing populated values are preserved.</p>}
+      {patch.payload.translation && <p>Translation: {patch.payload.translation.sourceField} → {patch.payload.translation.targetField}</p>}
       <p className="break-all text-sm text-muted-foreground">Created by {patch.payload.creator.kind} {patch.payload.creator.id} · {new Date(patch.payload.createdAt).toLocaleString()}</p>
       <details className="text-sm"><summary className="cursor-pointer">Patch details</summary><p className="break-all">ID: {patch.id}<br/>Source: {patch.payload.sourceId}<br/>Revision: {patch.revision}</p></details>
     </header>

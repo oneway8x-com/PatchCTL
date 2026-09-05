@@ -7,6 +7,7 @@ import { proposalInput, type Patch, type PatchPayload, type PatchRepository, typ
 import { PatchError } from "../patch.errors";
 import { requireSource } from "./sources";
 import { validateTextValue } from "../text-value";
+import { isMissingText } from "../missing-text";
 
 export async function preparePatch(input: unknown, actor: Actor, sources: SourceRepository, secrets: SourceSecrets, reader: ContentReader, patches: PatchRepository) {
   authorize(actor, "propose");
@@ -14,6 +15,12 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
   const parsed = proposalInput.parse(input);
   const source = await requireSource(actor, parsed.sourceId, sources);
   const schema = registeredSchema(source.schema);
+  if (parsed.translation) {
+    const from = schema.definition.fields[parsed.translation.sourceField], to = schema.definition.fields[parsed.translation.targetField];
+    if (parsed.mode !== "fill-missing" || !from?.readable || !to?.editable || from.type !== "text" || to.type !== "text" ||
+      !from.locale || !to.locale || from.locale === to.locale || parsed.translation.sourceField === parsed.translation.targetField)
+      throw new PatchError(400, "INVALID_TRANSLATION", "Translations require distinct declared source/target locales and fill-missing mode.");
+  }
   if (parsed.schemaVersion !== fingerprint(schema)) throw new PatchError(409, "SCHEMA_CHANGED", "Read the current schema before preparing a patch.");
   const ids = parsed.records.map(r => r.id);
   if (new Set(ids).size !== ids.length) throw new PatchError(400, "DUPLICATE_RECORD", "A record can appear only once per patch.");
@@ -23,6 +30,8 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
   for (const record of parsed.records) {
     const snapshot = snapshots.find(r => r.id === record.id);
     if (!snapshot || snapshot.version !== record.version) throw new PatchError(409, "STALE_RECORD", "A selected record changed or is unavailable. Read it again.");
+    if (parsed.translation && (isMissingText(snapshot.values[parsed.translation.sourceField]) || typeof snapshot.values[parsed.translation.sourceField] !== "string" || Object.keys(record.changes).some(name => name !== parsed.translation!.targetField)))
+      throw new PatchError(400, "INVALID_TRANSLATION", "Supply source text and change only the target locale.", { recordId: record.id });
     const before: Record<string, ChangeValue> = {};
     for (const [name, value] of Object.entries(record.changes)) {
       const field = Object.hasOwn(schema.definition.fields, name) ? schema.definition.fields[name] : undefined;
@@ -36,13 +45,16 @@ export async function preparePatch(input: unknown, actor: Actor, sources: Source
       }
       const previous = snapshot.values[name];
       if (previous === undefined) throw new PatchError(409, "MISSING_FIELD", "The record no longer matches the schema.");
+      if (parsed.mode === "fill-missing" && (!isMissingText(previous) || isMissingText(value)))
+        throw new PatchError(400, "TARGET_NOT_MISSING", "Fill-missing requires an empty target and nonempty replacement.", { recordId: record.id, field: name });
       if (previous === value) throw new PatchError(400, "NO_CHANGE", `Field ${name} is unchanged.`);
       before[name] = previous;
     }
     records.push({ id: record.id, version: record.version, before, after: record.changes });
   }
   const payload: PatchPayload = { sourceId: source.id, schemaVersion: parsed.schemaVersion,
-    sourceFingerprint: fingerprint({ sourceId: source.id, secretRef: source.secretRef, url }), reason: parsed.reason,
+    sourceFingerprint: fingerprint({ sourceId: source.id, secretRef: source.secretRef, url }), reason: parsed.reason, mode: parsed.mode,
+    ...(parsed.translation ? { translation: { sourceField: parsed.translation.sourceField, targetField: parsed.translation.targetField } } : {}),
     ...(parsed.agentRunLabel ? { agentRunLabel: parsed.agentRunLabel } : {}), records,
     creator: { id: actor.id, kind: actor.kind, ownerUserId: actor.ownerUserId }, createdAt: new Date().toISOString() };
   const patch: Patch = { id: randomUUID(), tenantId: actor.tenantId, revision: fingerprint({ tenantId: actor.tenantId, payload }), payload,
