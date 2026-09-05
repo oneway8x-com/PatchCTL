@@ -9,11 +9,13 @@
   "sourceId": "SOURCE_UUID",
   "schemaVersion": "SCHEMA_VERSION_FROM_READ",
   "reason": "Correct a typo in the article title",
-  "records": [{
-    "id": "ARTICLE_ID",
-    "version": "RECORD_VERSION_FROM_READ",
-    "changes": {"title": "Corrected title"}
-  }]
+  "records": [
+    {
+      "id": "ARTICLE_ID",
+      "version": "RECORD_VERSION_FROM_READ",
+      "changes": { "title": "Corrected title" }
+    }
+  ]
 }
 ```
 

@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(new URL(".", import.meta.url).pathname, "..");
+const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const appSrc = path.join(repoRoot, "apps", "app", "src");
 const appRoutes = path.join(repoRoot, "apps", "app", "app");
 const modulesDir = path.join(repoRoot, "packages", "modules");

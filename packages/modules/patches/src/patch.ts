@@ -2,19 +2,65 @@ import type { Actor } from "./access";
 import type { RelationTarget } from "./assignment";
 export { PatchProposalInputSchema as proposalInput } from "@corely/contracts";
 export type ChangeValue = string | number | null;
-export type PatchRecord = { id: string; version: string; before: Record<string, ChangeValue>; after: Record<string, ChangeValue>;
-  relations?: Record<string, { before: RelationTarget | null; after: RelationTarget | null }> };
-export type PatchPayload = { sourceId: string; schemaVersion: string; sourceFingerprint: string; reason: string; agentRunLabel?: string;
-  mode?: "edit" | "fill-missing"; translation?: { sourceField: string; targetField: string };
-  records: PatchRecord[]; creator: Pick<Actor, "id" | "kind" | "ownerUserId">; createdAt: string };
-export type PatchState = "pending" | "approved" | "rejected" | "applying" | "applied" | "conflict" | "failed";
-export type Patch = { id: string; tenantId: string; revision: string; state: PatchState; payload: PatchPayload;
-  reviewerId: string | null; reviewedAt: string | null; rejectionReason: string | null; appliedAt: string | null; failureCode: string | null };
+export type PatchRecord = {
+  id: string;
+  version: string;
+  before: Record<string, ChangeValue>;
+  after: Record<string, ChangeValue>;
+  relations?: Record<
+    string,
+    { before: RelationTarget | null; after: RelationTarget | null }
+  >;
+};
+export type PatchPayload = {
+  sourceId: string;
+  schemaVersion: string;
+  sourceFingerprint: string;
+  reason: string;
+  agentRunLabel?: string;
+  mode?: "edit" | "fill-missing";
+  translation?: { sourceField: string; targetField: string };
+  records: PatchRecord[];
+  creator: Pick<Actor, "id" | "kind" | "ownerUserId">;
+  createdAt: string;
+};
+export type PatchState =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "applying"
+  | "applied"
+  | "conflict"
+  | "failed";
+export type Patch = {
+  id: string;
+  tenantId: string;
+  revision: string;
+  state: PatchState;
+  payload: PatchPayload;
+  reviewerId: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  appliedAt: string | null;
+  failureCode: string | null;
+};
 export interface PatchRepository {
   create(patch: Patch): Promise<void>;
   find(tenantId: string, id: string): Promise<Patch | null>;
-  list(tenantId: string, connectionIds: string[] | null, after: string | undefined, limit: number): Promise<Patch[]>;
+  list(
+    tenantId: string,
+    connectionIds: string[] | null,
+    after: string | undefined,
+    limit: number,
+  ): Promise<Patch[]>;
 }
 export interface PatchDecisionRepository extends PatchRepository {
-  decide(tenantId: string, id: string, revision: string, reviewerId: string, decision: "approved" | "rejected", reason: string | null): Promise<boolean>;
+  decide(
+    tenantId: string,
+    id: string,
+    revision: string,
+    reviewerId: string,
+    decision: "approved" | "rejected",
+    reason: string | null,
+  ): Promise<boolean>;
 }

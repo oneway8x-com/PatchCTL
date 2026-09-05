@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true
+  },
+  "include": [
+    "playwright.patchctl.config.ts",
+    "playwright.patchctl-demo.config.ts",
+    "tests/patchctl/**/*.ts"
+  ]
+}

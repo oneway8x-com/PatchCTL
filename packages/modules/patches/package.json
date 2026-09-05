@@ -4,8 +4,25 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "vitest run" },
-  "dependencies": { "@corely/contracts": "workspace:*", "@prisma/client": "catalog:", "pg": "catalog:", "zod": "catalog:" },
-  "devDependencies": { "@corely/tsconfig": "workspace:*", "@prisma/adapter-pg": "catalog:", "@types/node": "catalog:", "@types/pg": "catalog:", "typescript": "catalog:" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@corely/contracts": "workspace:*",
+    "@prisma/client": "catalog:",
+    "pg": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@corely/tsconfig": "workspace:*",
+    "@prisma/adapter-pg": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "typescript": "catalog:"
+  }
 }

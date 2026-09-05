@@ -2,10 +2,22 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { seedDemo } from "../packages/modules/patches/src/demo.persistence";
 const url = process.env.PATCHCTL_TEST_DATABASE_URL;
-if (!url) throw new Error("Set PATCHCTL_TEST_DATABASE_URL to an isolated, migrated local database.");
+if (!url)
+  throw new Error(
+    "Set PATCHCTL_TEST_DATABASE_URL to an isolated, migrated local database.",
+  );
 const session = await seedDemo(url);
 const directory = resolve(".patchctl-demo", session.tenantId);
 await mkdir(directory, { recursive: true, mode: 0o700 });
 const sessionPath = resolve(directory, "session.json");
-await writeFile(sessionPath, JSON.stringify(session), { flag: "wx", mode: 0o600 });
-console.log(JSON.stringify({ sessionPath, tenantId: session.tenantId, sourceId: session.sourceId }));
+await writeFile(sessionPath, JSON.stringify(session), {
+  flag: "wx",
+  mode: 0o600,
+});
+console.log(
+  JSON.stringify({
+    sessionPath,
+    tenantId: session.tenantId,
+    sourceId: session.sourceId,
+  }),
+);

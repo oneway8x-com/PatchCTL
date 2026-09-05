@@ -7,7 +7,12 @@ Set `DATABASE_URL` for application metadata and `JWT_SECRET` to a random secret 
 Set `PATCHCTL_SOURCE_SECRETS` server-side to a JSON object. Each entry contains an operator-selected reference, its owning Tenant, and the Postgres connection URL, for example:
 
 ```json
-{"articles-dev":{"tenantId":"your-tenant-id","url":"postgresql://user:password@127.0.0.1:5434/content"}}
+{
+  "articles-dev": {
+    "tenantId": "your-tenant-id",
+    "url": "postgresql://user:password@127.0.0.1:5434/content"
+  }
+}
 ```
 
 Use a human credential with `configure` permission to POST `/api/patchctl/sources` with `{"name":"Articles","secretRef":"articles-dev"}`. The service verifies connectivity before saving the reference. GET the same endpoint to list authorized source IDs. POST `/api/patchctl/sources/{id}/test` to retest. URLs, credentials, and secret references are never returned by these endpoints. Operators supply TLS options in the connection URL; certificate validation is not disabled by the adapter.

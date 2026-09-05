@@ -1,5 +1,10 @@
 export class PatchError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string, public readonly details?: unknown) {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+    public readonly details?: unknown,
+  ) {
     super(message);
   }
 }

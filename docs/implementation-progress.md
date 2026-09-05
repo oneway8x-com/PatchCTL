@@ -1,28 +1,28 @@
 # PatchCTL implementation progress
 
-Work is performed sequentially on `main`, following issue #1. Each feature receives focused verification and a commit. GitHub issues stay open until their acceptance criteria are verified.
+Work was performed sequentially on local `main`, following issue #1, with per-feature commits. Implemented tickets remain open for the requested human review. Code has not been pushed; remote CI is not claimed to have run.
 
-| Order | Issue | State |
-| --- | --- | --- |
-| 1 | #2 Tenant authorization | Implemented; verification in progress |
-| 2 | #3 Postgres connection | Implemented; local database check pending |
-| 3 | #4 Content schema | Implemented; 28 focused/integration tests pass |
-| 4 | #5 Content reads | Implemented; 32 focused/integration tests pass |
-| 5 | #6 Patch persistence | Implemented; 42 focused/integration tests pass |
-| 6 | #7 Text corrections | Implemented; Unicode-aware text validation |
-| 7 | #10 Review UI | Implemented; browser checks pass; actions follow in #11/#13 |
-| 8 | #11 Approval/rejection | Implemented; 53 focused/integration tests pass |
-| 9 | #12 Conflicts | Implemented; real Postgres lock/race checks pass |
-| 10 | #13 Atomic apply | Implemented; rollback/idempotency/recovery tests pass |
-| 11 | #14 Audit | Implemented; real persistence/audit tests pass |
-| 12 | #15 CLI | Implemented; 8 CLI checks pass |
-| 13 | #8 Bulk changes | Implemented; bounded batch/stream checks pass |
-| 14 | #9 Missing content/translations | Implemented; 79 feature tests plus 8 CLI checks pass |
-| 15 | #17 English-summary demo | Implemented; real CLI/browser/Postgres demo passes |
-| 16 | #16 Enum/relation assignment | Implemented; 90 feature tests pass |
-| 17 | #18 Release verification | Verified locally; 151 repository tests, 9 CLI checks, 6 browser scenarios, typecheck/Prisma/build pass |
-| 18 | #19 Scheduling | Implemented; 103 feature tests pass, final browser/build checks pending |
-| 19 | #20 Status transitions | Blocked: target publishing semantics not defined |
+| Order | Issue                           | State                                                    |
+| ----- | ------------------------------- | -------------------------------------------------------- |
+| 1     | #2 Tenant authorization         | Implemented and verified locally; ready for human review |
+| 2     | #3 Postgres connection          | Implemented and verified locally; ready for human review |
+| 3     | #4 Content schema               | Implemented and verified locally; ready for human review |
+| 4     | #5 Content reads                | Implemented and verified locally; ready for human review |
+| 5     | #6 Patch persistence            | Implemented and verified locally; ready for human review |
+| 6     | #7 Text corrections             | Implemented and verified locally; ready for human review |
+| 7     | #10 Review UI                   | Implemented and verified locally; ready for human review |
+| 8     | #11 Approval/rejection          | Implemented and verified locally; ready for human review |
+| 9     | #12 Conflicts                   | Implemented and verified locally; ready for human review |
+| 10    | #13 Atomic apply                | Implemented and verified locally; ready for human review |
+| 11    | #14 Audit                       | Implemented and verified locally; ready for human review |
+| 12    | #15 CLI                         | Implemented and verified locally; ready for human review |
+| 13    | #8 Bulk changes                 | Implemented and verified locally; ready for human review |
+| 14    | #9 Missing content/translations | Implemented and verified locally; ready for human review |
+| 15    | #17 English-summary demo        | Implemented and verified locally; ready for human review |
+| 16    | #16 Enum/relation assignment    | Implemented and verified locally; ready for human review |
+| 17    | #18 Release verification        | Implemented and verified locally; ready for human review |
+| 18    | #19 Scheduling                  | Implemented and verified locally; ready for human review |
+| 19    | #20 Status transitions          | Blocked: publishing semantics required                   |
 
 ## Blockers
 
@@ -45,3 +45,12 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - #14: 65 tests pass, including real Prisma membership checks, concurrent decision CAS, atomic audit/state persistence, replay deduplication, history pagination, and audit surviving source-record deletion. All new feature typechecks pass.
 - #18: root typecheck and Prisma validation now pass after correcting three Todo test query inputs. Root Vitest discovery no longer runs nested module tests twice. Plain-table safety rejects user triggers, rewrite rules, partitions, row security and cascading writes through editable referenced keys. CI now runs isolated Postgres, CLI and browser checks sequentially around builds. A local overlapping build/demo run failed because rebuilding contracts temporarily removed its output; rerun sequentially (not a product defect).
 - #18: sequential real CLI/browser/Postgres regression passed: ten missing summaries, 50-record French-to-English translation, Unicode/multiline values, one text correction plus enum/relation assignment, rejection, conflict, premature apply and revision-tamper denials. Root build passed. GitHub Projects scope was rechecked and remains unavailable; CI is configured but not claimed to have run remotely.
+
+## Final verification and handoff
+
+- 163 repository unit/integration tests pass, including 103 PatchCTL tests against isolated Postgres.
+- 9 CLI checks and 7 Chromium tests pass (6 focused review screens plus the full-stack CLI/browser/Postgres scenario).
+- Root and browser-suite typechecks, Prisma validation, architecture checks and formatting of the new feature files pass. Final production-build result is recorded below when complete.
+- Browser fallback for GitHub Project 7 returned a GitHub 404 under the available browser session. Both available board-access paths were checked; issue comments remain available through the CLI.
+- No production content was changed. Dedicated local Postgres `patchctl-test-20260905` remains on loopback port 55437 for review/reseeding; test web servers have stopped. Demo credentials are in ignored `.patchctl-demo` session files and expire after one hour.
+- Main changed areas: `packages/modules/patches`, `packages/patchctl-cli`, shared patch contracts, Next.js PatchCTL routes/review screens, metadata migrations, isolated demo/Playwright tests, CI and operator documentation. Existing Todo edits are limited to three test query defaults; the architecture checker received a Windows-safe path fix.

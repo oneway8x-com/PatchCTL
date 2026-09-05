@@ -37,6 +37,8 @@ jobs:
       - run: pnpm --filter @corely/data exec prisma migrate deploy
       - run: pnpm build:packages
       - run: pnpm typecheck
+      - run: pnpm --filter @corely/e2e exec tsc -p tsconfig.patchctl.json
+      - run: pnpm arch:check
       - run: pnpm test
       - run: pnpm --filter patchctl test
       - run: pnpm --filter @corely/e2e exec playwright install --with-deps chromium
