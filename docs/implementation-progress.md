@@ -5,8 +5,8 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 | Order | Issue | State |
 | --- | --- | --- |
 | 1 | #2 Tenant authorization | Implemented; verification in progress |
-| 2 | #3 Postgres connection | Next |
-| 3 | #4 Content schema | Pending |
+| 2 | #3 Postgres connection | Implemented; local database check pending |
+| 3 | #4 Content schema | Next |
 | 4 | #5 Content reads | Pending |
 | 5 | #6 Patch persistence | Pending |
 | 6 | #7 Text corrections | Pending |
@@ -34,3 +34,5 @@ Work is performed sequentially on `main`, following issue #1. Each feature recei
 - Root typecheck currently stops in pre-existing Todo integration tests: lines 57, 61, 85 pass `{}` where parsed query input requires `page` and `pageSize`. Tracked for #18; this does not prevent focused patches checks.
 - Docker server is unavailable on both configured local contexts. Installed PostgreSQL directories contain no postgres/initdb/pg_ctl binaries. Real database verification remains pending while checking a local runtime alternative.
 - No production database changes are performed; database verification uses isolated local fixtures.
+- #2 production build and application typecheck passed. #3 adds configured Tenant-owned secret references, connection probing, redacted source APIs, and setup documentation. Focused suite: 21 passing tests.
+- Docker blocker resolved by starting the installed Docker Desktop. A dedicated test Postgres container is being provisioned on loopback port 55437.
