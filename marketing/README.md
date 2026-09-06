@@ -17,11 +17,14 @@ identified as such, and require human editorial review.
 4. **Human review:** review the exact normalized payload, account/community, destination, options,
    source revision, limitations, and SHA-256 fingerprint. `ready` is editorial state, not an
    agent-editable authorization flag.
-5. **Controlled X publishing:** the maintainer separately runs reviewed publisher code in the
-   isolated persistent environment. It rechecks policy, pinned `xurl`, account identity, exact
-   fingerprint, interactive confirmation, and the durable journal. Reddit is manual export only.
-6. **Receipt/recovery:** an attempt is persisted before send. Confirmed posts get a sanitized
-   public receipt; ambiguous outcomes block retries until operator reconciliation.
+5. **Human X posting:** choose either the no-API Web Intent link, where the maintainer checks the
+   signed-in account and clicks Post in X, or the controlled API publisher in the isolated persistent
+   environment. Both paths require the ready bundle and exact reviewed fingerprint. API mode also
+   rechecks policy, pinned `xurl`, account identity, interactive confirmation, and the durable journal.
+   Reddit is manual export only.
+6. **Receipt/recovery:** API attempts are persisted before send and confirmed API posts get a
+   sanitized public receipt. Opening a Web Intent only creates an editable browser draft, so it
+   produces no journal entry or publication receipt.
 
 ## Commands
 
@@ -34,6 +37,7 @@ pnpm marketing validate "$BUNDLE" --json
 pnpm marketing preview "$BUNDLE" --channel x --json
 pnpm marketing export "$BUNDLE" --channel reddit
 pnpm marketing publish "$BUNDLE" --channel x --dry-run
+pnpm marketing publish "$BUNDLE" --channel x --web-intent --expected-hash '<preview fingerprint>'
 pnpm marketing publish "$BUNDLE" --channel x --live --expected-hash '<preview fingerprint>'
 pnpm marketing status "$BUNDLE" --json
 pnpm marketing reconcile "$BUNDLE" --channel x --remote-id '<id>' --remote-url 'https://x.com/<account>/status/<id>' --published-at '<ISO timestamp>'
@@ -41,11 +45,15 @@ pnpm marketing reconcile "$BUNDLE" --channel x --repair-receipt
 pnpm marketing:test
 ```
 
-`collect`, `validate`, `preview`, `export`, and `--dry-run` are offline and credential-free. X live
-mode is deliberately interactive and fails closed without `xurl` v1.3.1, a matching account,
-a current policy confirmation both before review and immediately before send, an exact expected hash,
-and a terminal confirmation. Reddit live publication
-returns `CHANNEL_MANUAL_ONLY`. Machine-readable errors use stable codes including
+`collect`, `validate`, `preview`, `export`, `--dry-run`, and `--web-intent` are credential-free.
+Web Intent mode makes no API request: it prints an official X compose link containing the exact
+reviewed text. The maintainer clicks the link, verifies the signed-in account and editable text,
+and explicitly clicks Post in the browser. Because the CLI cannot know whether that draft is posted,
+edited, or abandoned, it writes no journal entry or receipt and never reports publication success.
+X `--live` API mode is deliberately interactive and fails closed without `xurl` v1.3.1, a matching
+account, a current policy confirmation both before review and immediately before send, an exact
+expected hash, and a terminal confirmation. Reddit live publication returns `CHANNEL_MANUAL_ONLY`.
+Machine-readable errors use stable codes including
 `AUTH_NOT_CONFIGURED`, `ACCOUNT_MISMATCH`, `POLICY_NOT_CONFIRMED`, `CONTENT_CHANGED`,
 `ALREADY_PUBLISHED`, `PUBLISH_OUTCOME_UNKNOWN`, and `CHANNEL_MANUAL_ONLY`. Exit status is stable by
 class: `1` internal, `2` command/manifest/path/content validation, `3` approval/policy/manual-channel,

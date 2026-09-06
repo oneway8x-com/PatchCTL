@@ -6,6 +6,7 @@ import { collectEvidence } from "./collect.mjs";
 import { discoverBundles, loadBundle, previewResult } from "./bundle.mjs";
 import { asMarketingError, errorResult, MarketingError } from "./errors.mjs";
 import {
+  assertApprovedXPayload,
   publicationStatus,
   publishLive,
   reconcilePublication,
@@ -15,6 +16,7 @@ const BOOLEAN_FLAGS = new Set([
   "json",
   "dry-run",
   "live",
+  "web-intent",
   "no-post",
   "repair-receipt",
 ]);
@@ -113,6 +115,12 @@ async function interactiveConfirmation({ bundle, identity, phrase }) {
   }
 }
 
+export function buildXWebIntentUrl(text) {
+  const url = new URL("https://x.com/intent/tweet");
+  url.searchParams.set("text", text);
+  return url.toString();
+}
+
 async function run(parsed) {
   const json = parsed.flags.json === true;
   if (parsed.command === "collect") {
@@ -163,7 +171,14 @@ async function run(parsed) {
   if (parsed.command === "publish") {
     requireShape(parsed, {
       positionals: 1,
-      flags: ["channel", "dry-run", "live", "expected-hash", "json"],
+      flags: [
+        "channel",
+        "dry-run",
+        "live",
+        "web-intent",
+        "expected-hash",
+        "json",
+      ],
     });
     if (parsed.flags.channel === "reddit")
       throw new MarketingError(
@@ -175,10 +190,15 @@ async function run(parsed) {
         "INVALID_COMMAND",
         "publish requires --channel x.",
       );
-    if (Boolean(parsed.flags["dry-run"]) === Boolean(parsed.flags.live))
+    const selectedModes = [
+      parsed.flags["dry-run"],
+      parsed.flags.live,
+      parsed.flags["web-intent"],
+    ].filter(Boolean).length;
+    if (selectedModes !== 1)
       throw new MarketingError(
         "INVALID_COMMAND",
-        "Choose exactly one of --dry-run or --live.",
+        "Choose exactly one of --dry-run, --live, or --web-intent.",
       );
     const bundle = await loadBundle(parsed.positional[0]);
     if (parsed.flags["dry-run"])
@@ -189,6 +209,22 @@ async function run(parsed) {
         networkUsed: false,
         journalWritten: false,
       };
+    if (parsed.flags["web-intent"]) {
+      assertApprovedXPayload(bundle, parsed.flags["expected-hash"]);
+      return {
+        ok: true,
+        operation: "publish",
+        channel: "x",
+        mode: "web-intent",
+        updateId: bundle.manifest.updateId,
+        intendedAccount: bundle.manifest.channels.x.intendedAccount,
+        fingerprint: bundle.xFingerprint,
+        intentUrl: buildXWebIntentUrl(bundle.xText),
+        apiUsed: false,
+        journalWritten: false,
+        publicationConfirmed: false,
+      };
+    }
     return publishLive(bundle, parsed.flags["expected-hash"], {
       confirm: interactiveConfirmation,
     });
@@ -279,6 +315,17 @@ export async function main(argv = process.argv.slice(2)) {
       );
     else if (result.operation === "validate")
       stdout.write(`Validated ${result.bundles.length} marketing bundle(s).\n`);
+    else if (result.mode === "web-intent")
+      stdout.write(
+        [
+          `Open this link to compose the reviewed text on X as @${result.intendedAccount.replace(/^@/, "")}:`,
+          result.intentUrl,
+          "",
+          "No API request was made. Check the signed-in X account and text, then click Post in the browser.",
+          "Opening the link is not proof of publication, so no journal entry or receipt was created.",
+          "",
+        ].join("\n"),
+      );
     else writeJson(result);
     return 0;
   } catch (error) {

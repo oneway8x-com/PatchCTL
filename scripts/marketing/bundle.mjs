@@ -544,7 +544,7 @@ export function assertLiveReady(bundle) {
   if (bundle.manifest.editorialState !== "ready" || blockers.length)
     throw new MarketingError(
       "POLICY_NOT_CONFIRMED",
-      "Bundle is not ready for live publication.",
+      "Bundle is not ready for publication.",
       { editorialState: bundle.manifest.editorialState, blockers },
     );
   if (

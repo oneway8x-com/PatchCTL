@@ -75,6 +75,19 @@ export async function readPolicyConfirmation(
   return value;
 }
 
+export function assertApprovedXPayload(bundle, expectedHash) {
+  assertLiveReady(bundle);
+  if (
+    !/^[a-f0-9]{64}$/.test(expectedHash ?? "") ||
+    expectedHash !== bundle.xFingerprint
+  )
+    throw new MarketingError(
+      "CONTENT_CHANGED",
+      "Expected fingerprint does not match the normalized approved payload.",
+      { expected: expectedHash, actual: bundle.xFingerprint },
+    );
+}
+
 export async function publishLive(
   bundle,
   expectedHash,
@@ -87,16 +100,7 @@ export async function publishLive(
     receiptFailurePoint,
   } = {},
 ) {
-  assertLiveReady(bundle);
-  if (
-    !/^[a-f0-9]{64}$/.test(expectedHash ?? "") ||
-    expectedHash !== bundle.xFingerprint
-  )
-    throw new MarketingError(
-      "CONTENT_CHANGED",
-      "Expected fingerprint does not match the normalized approved payload.",
-      { expected: expectedHash, actual: bundle.xFingerprint },
-    );
+  assertApprovedXPayload(bundle, expectedHash);
   await readPolicyConfirmation(root, { now });
   await transport.verifyVersion();
   const identity = await transport.identity(

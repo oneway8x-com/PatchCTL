@@ -14,7 +14,12 @@ Corrections use a new commit and, after publication, a new receipt/addendum or c
 
 Drafting, validation, approval, and publishing are separate events. Human approval binds one payload, channel, destination, account/community, source revision, and hash. It does not authorize edits, retries after an uncertain result, another channel, replies, media, engagement, or scheduling.
 
-The X MVP is one human-approved standalone text post through the isolated controlled runbook. Reddit is manual export only. A proposed operator routine is not a schedule and must not become unattended automation without a separately reviewed policy and implementation.
+The X MVP is one human-approved standalone text post. The maintainer may complete it manually through
+X's official Web Intent without an API call, or use the isolated controlled API runbook. Web Intent
+only creates an editable browser draft: the maintainer must verify the signed-in account and click
+Post, and the tooling must not claim success or create a receipt from opening the link. Reddit is
+manual export only. A proposed operator routine is not a schedule and must not become unattended
+automation without a separately reviewed policy and implementation.
 
 ## Future GitHub publishing only
 

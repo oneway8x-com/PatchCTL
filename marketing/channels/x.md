@@ -1,6 +1,7 @@
 # X controlled-publishing runbook
 
-Official [xurl](https://docs.x.com/tools/xurl), [post creation](https://docs.x.com/x-api/posts/create-post),
+Official [X Web Intent](https://docs.x.com/x-for-websites/post-button/guides/web-intent),
+[xurl](https://docs.x.com/tools/xurl), [post creation](https://docs.x.com/x-api/posts/create-post),
 [weighted counting](https://docs.x.com/resources/fundamentals/counting-characters),
 [automation rules](https://help.x.com/en/rules-and-policies/x-automation),
 [developer guidelines](https://docs.x.com/developer-guidelines), and
@@ -14,8 +15,9 @@ Content was rephrased for compliance with licensing restrictions.
 
 The MVP permits one human-approved standalone text post, optionally containing an ordinary source
 link. It excludes replies, mentions, threads, quotes, reposts, likes, follows, DMs, media, polls,
-deletes, engagement automation, and scheduling. Use only the official API—never browser automation
-or scraping. An internal safeguard such as one post per day is a maintainer cap, not an X quota.
+deletes, engagement automation, and scheduling. Use either the official X Web Intent for a manual,
+human-completed browser post or the official API publisher. Never automate browser actions or
+scrape X. An internal safeguard such as one post per day is a maintainer cap, not an X quota.
 
 X's help policy specifically requires prior written approval for AI-powered automated reply bots;
 the developer guidelines use broader wording around AI-generated content and replies. Human review
@@ -44,7 +46,7 @@ credentials, and that the maintainer reviews both publisher and payload revision
 secret, not automatically an OS keychain. Never read it into agent context, copy it into the repo,
 use verbose auth logging, run `xurl token`, or paste keys/tokens into chat.
 
-## One-time operator setup
+## One-time API publisher setup
 
 Inside the isolated identity, install the reviewed official version (or verify a release binary
 against the reviewed release), then configure OAuth2 user context manually:
@@ -90,13 +92,21 @@ BUNDLE=marketing/build-in-public/2026-09-05-local-first-review
 pnpm marketing validate "$BUNDLE" --json
 pnpm marketing preview "$BUNDLE" --channel x --json
 pnpm marketing publish "$BUNDLE" --channel x --dry-run
+pnpm marketing publish "$BUNDLE" --channel x --web-intent --expected-hash '<fingerprint from preview>'
+# Or use the paid API publisher:
 pnpm marketing status "$BUNDLE" --json
 pnpm marketing publish "$BUNDLE" --channel x --live --expected-hash '<fingerprint from preview>'
 ```
 
 Offline preview shows the exact normalized text, weighted count, account, destination, options,
 revision, blockers, and fingerprint. The fingerprint also binds the update ID and source revision.
-Live mode revalidates, copies those exact values into an in-memory snapshot, checks pinned xurl and
+Web Intent mode checks that the bundle is ready and the fingerprint is unchanged, then prints a
+clickable official X compose URL with the reviewed text prefilled. It uses no API credential or API
+request. The maintainer must verify the browser's signed-in account and text before clicking Post.
+The browser draft remains editable, and opening it does not confirm publication, so this mode does
+not write the API journal or a receipt.
+
+API live mode revalidates, copies those exact values into an in-memory snapshot, checks pinned xurl and
 the authenticated `/2/users/me` response for the selected OAuth2 token, then requires the human to
 type a fingerprint-specific phrase in the isolated terminal. It rechecks the owner-only policy file
 under the journal lock immediately before persisting an attempt or sending. There is no `--yes` or
