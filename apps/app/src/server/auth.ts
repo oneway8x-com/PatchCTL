@@ -6,6 +6,8 @@
  *  - No Resend API call is made.
  */
 import { getPrisma } from "./prisma";
+import { provisionSignedInAccount } from "./auth-provisioning";
+import { PrismaAuthProvisioningRepository } from "./auth-provisioning.repository";
 import crypto from "node:crypto";
 import { createHash, randomInt } from "node:crypto";
 
@@ -38,11 +40,15 @@ function base64url(buf: Buffer | string): string {
 
 async function signJwt(
   payload: Record<string, unknown>,
-  expiresInSec: number
+  expiresInSec: number,
 ): Promise<string> {
   const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const body = base64url(
-    JSON.stringify({ ...payload, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + expiresInSec })
+    JSON.stringify({
+      ...payload,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + expiresInSec,
+    }),
   );
   const data = `${header}.${body}`;
   const key = await crypto.subtle.importKey(
@@ -50,14 +56,14 @@ async function signJwt(
     Buffer.from(JWT_SECRET),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
   const sig = await crypto.subtle.sign("HMAC", key, Buffer.from(data));
   return `${data}.${base64url(Buffer.from(sig))}`;
 }
 
 export async function verifyJwt(
-  token: string
+  token: string,
 ): Promise<Record<string, unknown> | null> {
   try {
     const parts = token.split(".");
@@ -68,17 +74,23 @@ export async function verifyJwt(
       Buffer.from(JWT_SECRET),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["verify"]
+      ["verify"],
     );
     const valid = await crypto.subtle.verify(
       "HMAC",
       key,
       Buffer.from(sig, "base64url"),
-      Buffer.from(`${header}.${body}`)
+      Buffer.from(`${header}.${body}`),
     );
     if (!valid) return null;
-    const decoded = JSON.parse(Buffer.from(body, "base64url").toString()) as Record<string, unknown>;
-    if (typeof decoded.exp === "number" && decoded.exp < Math.floor(Date.now() / 1000)) return null;
+    const decoded = JSON.parse(
+      Buffer.from(body, "base64url").toString(),
+    ) as Record<string, unknown>;
+    if (
+      typeof decoded.exp === "number" &&
+      decoded.exp < Math.floor(Date.now() / 1000)
+    )
+      return null;
     return decoded;
   } catch {
     return null;
@@ -89,8 +101,14 @@ export async function verifyJwt(
 
 function problem(status: number, title: string, detail?: string): Response {
   return Response.json(
-    { type: "about:blank", title, detail: detail ?? title, status, code: `Auth:${title.replace(/\s+/g, "")}` },
-    { status }
+    {
+      type: "about:blank",
+      title,
+      detail: detail ?? title,
+      status,
+      code: `Auth:${title.replace(/\s+/g, "")}`,
+    },
+    { status },
   );
 }
 
@@ -103,7 +121,7 @@ function problem(status: number, title: string, detail?: string): Response {
  *  - In PROD: sends the code by email (Resend)
  */
 export async function handleRequestCode(request: Request): Promise<Response> {
-  const body = await request.json().catch(() => ({})) as {
+  const body = (await request.json().catch(() => ({}))) as {
     email?: string;
     mode?: "login" | "signup";
     tenantId?: string | null;
@@ -127,9 +145,13 @@ export async function handleRequestCode(request: Request): Promise<Response> {
   });
 
   if (existing) {
-    const cooldownEnd = new Date(existing.lastSentAt.getTime() + OTP_COOLDOWN_SEC * 1000);
+    const cooldownEnd = new Date(
+      existing.lastSentAt.getTime() + OTP_COOLDOWN_SEC * 1000,
+    );
     if (new Date() < cooldownEnd) {
-      const secondsLeft = Math.ceil((cooldownEnd.getTime() - Date.now()) / 1000);
+      const secondsLeft = Math.ceil(
+        (cooldownEnd.getTime() - Date.now()) / 1000,
+      );
       return Response.json({
         message: "Code already sent. Please wait before requesting again.",
         status: "cooldown",
@@ -149,7 +171,12 @@ export async function handleRequestCode(request: Request): Promise<Response> {
       },
     });
     await deliverOtp(email, code);
-    return Response.json({ message: "Verification code sent.", status: "code_sent", canProceed: true, nextAction: "enter_code" });
+    return Response.json({
+      message: "Verification code sent.",
+      status: "code_sent",
+      canProceed: true,
+      nextAction: "enter_code",
+    });
   }
 
   // Create new OTP
@@ -177,7 +204,7 @@ export async function handleRequestCode(request: Request): Promise<Response> {
  * POST /auth/verify-code
  */
 export async function handleVerifyCode(request: Request): Promise<Response> {
-  const body = await request.json().catch(() => ({})) as {
+  const body = (await request.json().catch(() => ({}))) as {
     email?: string;
     code?: string;
     mode?: "login" | "signup";
@@ -205,11 +232,19 @@ export async function handleVerifyCode(request: Request): Promise<Response> {
   });
 
   if (!otpRecord) {
-    return problem(400, "InvalidCode", "No active code found. Please request a new one.");
+    return problem(
+      400,
+      "InvalidCode",
+      "No active code found. Please request a new one.",
+    );
   }
 
   if (otpRecord.attemptCount >= OTP_MAX_ATTEMPTS) {
-    return problem(400, "TooManyAttempts", "Too many failed attempts. Please request a new code.");
+    return problem(
+      400,
+      "TooManyAttempts",
+      "Too many failed attempts. Please request a new code.",
+    );
   }
 
   if (otpRecord.codeHash !== hashCode(code)) {
@@ -220,39 +255,39 @@ export async function handleVerifyCode(request: Request): Promise<Response> {
     return problem(400, "InvalidCode", "Invalid verification code.");
   }
 
-  // Mark consumed
-  await prisma.portalOtpCode.update({
-    where: { id: otpRecord.id },
+  const consumed = await prisma.portalOtpCode.updateMany({
+    where: {
+      id: otpRecord.id,
+      codeHash: hashCode(code),
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+      attemptCount: { lt: OTP_MAX_ATTEMPTS },
+    },
     data: { consumedAt: new Date() },
   });
-
-  // Find or create user
-  let user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    // Auto-create on first login (passwordless signup flow)
-    user = await prisma.user.create({
-      data: {
-        email,
-        name: body.userName ?? email.split("@")[0],
-        passwordHash: "",
-        status: "ACTIVE",
-      },
-    });
+  if (consumed.count !== 1) {
+    return problem(
+      400,
+      "InvalidCode",
+      "This verification code was already used or expired.",
+    );
   }
 
-  // Find tenant membership
-  const membership = await prisma.membership.findFirst({
-    where: { userId: user.id },
-    include: { tenant: true },
-  });
-
-  const tenantId = membership?.tenantId ?? null;
-  const tenantName = membership?.tenant?.name ?? null;
+  const account = await provisionSignedInAccount(
+    new PrismaAuthProvisioningRepository(prisma),
+    {
+      email,
+      userName: body.userName,
+    },
+  );
+  const { user, membership } = account;
+  const tenantId = membership.tenantId;
+  const tenantName = membership.tenant.name;
 
   // Issue tokens
   const accessToken = await signJwt(
     { sub: user.id, email: user.email, tenantId },
-    ACCESS_TOKEN_TTL_SEC
+    ACCESS_TOKEN_TTL_SEC,
   );
   const rawRefresh = crypto.randomBytes(40).toString("hex");
   const refreshToken = rawRefresh;
@@ -273,6 +308,7 @@ export async function handleVerifyCode(request: Request): Promise<Response> {
     email: user.email,
     tenantId,
     tenantName,
+    membershipId: membership.id,
   });
 }
 
@@ -314,7 +350,9 @@ export async function handleGetMe(request: Request): Promise<Response> {
  * POST /auth/refresh
  */
 export async function handleRefresh(request: Request): Promise<Response> {
-  const body = await request.json().catch(() => ({})) as { refreshToken?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    refreshToken?: string;
+  };
   const rawToken = body.refreshToken ?? "";
   if (!rawToken) return problem(401, "Unauthorized");
 
@@ -328,11 +366,12 @@ export async function handleRefresh(request: Request): Promise<Response> {
     include: { user: true },
   });
 
-  if (!record) return problem(401, "Unauthorized", "Refresh token invalid or expired");
+  if (!record)
+    return problem(401, "Unauthorized", "Refresh token invalid or expired");
 
   const accessToken = await signJwt(
     { sub: record.userId, email: record.user.email, tenantId: record.tenantId },
-    ACCESS_TOKEN_TTL_SEC
+    ACCESS_TOKEN_TTL_SEC,
   );
 
   return Response.json({ accessToken });
@@ -342,7 +381,9 @@ export async function handleRefresh(request: Request): Promise<Response> {
  * POST /auth/logout
  */
 export async function handleLogout(request: Request): Promise<Response> {
-  const body = await request.json().catch(() => ({})) as { refreshToken?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    refreshToken?: string;
+  };
   const rawToken = body.refreshToken ?? "";
 
   if (rawToken) {
@@ -384,7 +425,10 @@ async function deliverOtp(email: string, code: string): Promise<void> {
   const fromAddress = process.env.EMAIL_FROM ?? "noreply@specpilot.app";
   await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       from: fromAddress,
       to: email,

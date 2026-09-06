@@ -16,6 +16,7 @@ const currentUserSchema = z.object({
   memberships: z.array(
     z.object({
       tenantId: z.string().nullable().optional(),
+      tenantName: z.string().nullable().optional(),
       roleId: z.string(),
     }),
   ),
@@ -44,7 +45,111 @@ function requireDisposableDatabase(url: string, name: string) {
   }
 }
 
-test("a registered and activated account connects the local CLI and reviews its patch", async ({
+test("a verification code can provision only one concurrent session", async ({
+  request,
+}) => {
+  const session = sessionSchema.parse(
+    JSON.parse(await readFile(process.env.PATCHCTL_DEMO_SESSION!, "utf8")),
+  );
+  requireDisposableDatabase(session.url, "PatchCTL metadata");
+
+  const metadata = new Pool({ connectionString: session.url });
+  const email = `account-replay-${randomUUID().replaceAll("-", "")}@example.test`;
+  const otp = "739201";
+  const otpHash = createHash("sha256").update(otp).digest("hex");
+  let tenantId: string | undefined;
+
+  try {
+    const requested = await request.post("/api/auth/request-code", {
+      data: { email },
+    });
+    expect(requested.status()).toBe(200);
+    const updated = await metadata.query(
+      `UPDATE "PortalOtpCode"
+       SET "codeHash" = $2, "expiresAt" = NOW() + INTERVAL '15 minutes',
+           "attemptCount" = 0, "updatedAt" = NOW()
+       WHERE "id" = (
+         SELECT "id" FROM "PortalOtpCode"
+         WHERE "emailNormalized" = $1 AND "consumedAt" IS NULL
+         ORDER BY "createdAt" DESC LIMIT 1
+       )
+       RETURNING "id"`,
+      [email, otpHash],
+    );
+    expect(updated.rowCount).toBe(1);
+
+    const responses = await Promise.all([
+      request.post("/api/auth/verify-code", { data: { email, code: otp } }),
+      request.post("/api/auth/verify-code", { data: { email, code: otp } }),
+    ]);
+    expect(responses.map((response) => response.status()).sort()).toEqual([
+      200, 400,
+    ]);
+
+    const successful = responses.find((response) => response.status() === 200);
+    expect(successful).toBeDefined();
+    const signedIn = z
+      .object({
+        userId: z.string(),
+        tenantId: z.string(),
+        tenantName: z.string(),
+        membershipId: z.string(),
+      })
+      .parse(await successful!.json());
+    tenantId = signedIn.tenantId;
+
+    const provisioned = await metadata.query<{
+      tenantId: string;
+      tenantName: string;
+      systemKey: string;
+      refreshTokenId: string;
+    }>(
+      `SELECT t."id" AS "tenantId", t."name" AS "tenantName",
+              r."systemKey" AS "systemKey", rt."id" AS "refreshTokenId"
+       FROM "User" u
+       JOIN "Membership" m ON m."userId" = u."id"
+       JOIN "Tenant" t ON t."id" = m."tenantId"
+       JOIN "Role" r ON r."id" = m."roleId"
+       JOIN "RefreshToken" rt ON rt."userId" = u."id"
+       WHERE u."email" = $1`,
+      [email],
+    );
+    expect(provisioned.rows).toHaveLength(1);
+    expect(provisioned.rows[0]).toMatchObject({
+      tenantId,
+      tenantName: `${email.split("@")[0]}'s Tenant`,
+      systemKey: "OWNER",
+    });
+
+    const consumed = await metadata.query(
+      `SELECT "id" FROM "PortalOtpCode"
+       WHERE "emailNormalized" = $1 AND "consumedAt" IS NOT NULL`,
+      [email],
+    );
+    expect(consumed.rows).toHaveLength(1);
+  } finally {
+    if (tenantId) {
+      await metadata.query(`DELETE FROM "RefreshToken" WHERE "tenantId" = $1`, [
+        tenantId,
+      ]);
+      await metadata.query(`DELETE FROM "Membership" WHERE "tenantId" = $1`, [
+        tenantId,
+      ]);
+      await metadata.query(`DELETE FROM "Role" WHERE "tenantId" = $1`, [
+        tenantId,
+      ]);
+      await metadata.query(`DELETE FROM "Tenant" WHERE "id" = $1`, [tenantId]);
+    }
+    await metadata.query(`DELETE FROM "User" WHERE "email" = $1`, [email]);
+    await metadata.query(
+      `DELETE FROM "PortalOtpCode" WHERE "emailNormalized" = $1`,
+      [email],
+    );
+    await metadata.end();
+  }
+});
+
+test("a first login provisions one Tenant and connects the local CLI", async ({
   page,
   request,
 }) => {
@@ -59,11 +164,7 @@ test("a registered and activated account connects the local CLI and reviews its 
 
   const suffix = randomUUID().replaceAll("-", "");
   const email = `account-e2e-${suffix}@example.test`;
-  const tenantId = randomUUID();
-  const tenantName = `Account E2E ${suffix.slice(0, 8)}`;
-  const tenantSlug = `account-e2e-${suffix}`;
-  const roleId = randomUUID();
-  const membershipId = randomUUID();
+  const expectedTenantName = `${email.split("@")[0]}'s Tenant`;
   const cliTenant = `account_${suffix.slice(0, 16)}`;
   const namespace = `account_${suffix}`;
   const otp = "739201";
@@ -158,6 +259,7 @@ test("a registered and activated account connects the local CLI and reviews its 
     });
   }
 
+  let provisionedTenantId: string | undefined;
   try {
     await content.query(`CREATE SCHEMA "${namespace}"`);
     await content.query(
@@ -173,53 +275,63 @@ test("a registered and activated account connects the local CLI and reviews its 
 
     await signInWithFreshCode();
     const registered = await currentUser();
-    expect(registered).toMatchObject({
-      email,
-      activeTenantId: null,
-      memberships: [],
+    expect(registered.email).toBe(email);
+    const tenantId = registered.activeTenantId;
+    if (!tenantId) {
+      throw new Error(
+        "First verified login did not provision an active Tenant",
+      );
+    }
+    provisionedTenantId = tenantId;
+    expect(registered.memberships).toHaveLength(1);
+    expect(registered.memberships[0]).toMatchObject({
+      tenantId,
+      tenantName: expectedTenantName,
     });
+    const roleId = registered.memberships[0]!.roleId;
 
-    await page.goto("/patches");
     await expect(
-      page.getByRole("alert").filter({ hasText: "Patch data is unavailable" }),
-    ).toContainText("Tenant access");
+      page.getByRole("heading", { name: "Dashboard" }),
+    ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Create client token" }),
-    ).toHaveCount(0);
+      page.getByRole("heading", { name: "Active Tenant" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(expectedTenantName, { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(tenantId, { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Connect your local CLI" }),
+    ).toBeVisible();
 
-    const user = await metadata.query<{ id: string }>(
-      `SELECT "id" FROM "User" WHERE "email" = $1`,
+    const onboardingCommands = await page.locator("pre code").allTextContents();
+    expect(onboardingCommands).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("pnpm patchctl connect postgres --tenant"),
+        expect.stringContaining("pnpm patchctl login --server"),
+        expect.stringContaining("pnpm patchctl submit"),
+      ]),
+    );
+    expect(onboardingCommands.join("\n")).not.toContain("pct_");
+
+    const provisioned = await metadata.query<{
+      tenantId: string;
+      tenantName: string;
+      roleId: string;
+      systemKey: string;
+    }>(
+      `SELECT t."id" AS "tenantId", t."name" AS "tenantName",
+              r."id" AS "roleId", r."systemKey" AS "systemKey"
+       FROM "User" u
+       JOIN "Membership" m ON m."userId" = u."id"
+       JOIN "Tenant" t ON t."id" = m."tenantId"
+       JOIN "Role" r ON r."id" = m."roleId"
+       WHERE u."email" = $1`,
       [email],
     );
-    expect(user.rows).toHaveLength(1);
-    expect(user.rows[0]?.id).toBe(registered.userId);
-
-    const operator = await metadata.connect();
-    try {
-      await operator.query("BEGIN");
-      await operator.query(
-        `INSERT INTO "Tenant" ("id", "name", "slug", "status")
-         VALUES ($1, $2, $3, 'ACTIVE')`,
-        [tenantId, tenantName, tenantSlug],
-      );
-      await operator.query(
-        `INSERT INTO "Role"
-          ("id", "tenantId", "name", "scope", "systemKey", "isSystem", "updatedAt")
-         VALUES ($1, $2, 'Account E2E administrator', 'TENANT', 'ADMIN', true, NOW())`,
-        [roleId, tenantId],
-      );
-      await operator.query(
-        `INSERT INTO "Membership" ("id", "tenantId", "userId", "roleId")
-         VALUES ($1, $2, $3, $4)`,
-        [membershipId, tenantId, registered.userId, roleId],
-      );
-      await operator.query("COMMIT");
-    } catch (error) {
-      await operator.query("ROLLBACK");
-      throw error;
-    } finally {
-      operator.release();
-    }
+    expect(provisioned.rows).toEqual([
+      { tenantId, tenantName: expectedTenantName, roleId, systemKey: "OWNER" },
+    ]);
 
     const oldSession = await browserTokens();
     expect(oldSession.accessToken).toBeTruthy();
@@ -236,16 +348,24 @@ test("a registered and activated account connects the local CLI and reviews its 
     });
 
     await signInWithFreshCode();
-    const activated = await currentUser();
-    expect(activated.activeTenantId).toBe(tenantId);
-    expect(activated.memberships).toContainEqual(
-      expect.objectContaining({ tenantId, roleId }),
+    const reused = await currentUser();
+    expect(reused.activeTenantId).toBe(tenantId);
+    expect(reused.memberships).toEqual([
+      expect.objectContaining({
+        tenantId,
+        tenantName: expectedTenantName,
+        roleId,
+      }),
+    ]);
+    const stillProvisioned = await metadata.query(
+      `SELECT m."id"
+       FROM "Membership" m
+       JOIN "User" u ON u."id" = m."userId"
+       WHERE u."email" = $1`,
+      [email],
     );
+    expect(stillProvisioned.rows).toHaveLength(1);
 
-    await page.goto("/patches");
-    await expect(
-      page.getByRole("heading", { name: "Connect your local client" }),
-    ).toBeVisible();
     await page.getByRole("button", { name: "Create client token" }).click();
     const tokenInput = page.getByLabel(
       "Copy this token now; it is shown only in this session",
@@ -254,6 +374,9 @@ test("a registered and activated account connects the local CLI and reviews its 
     const clientToken = await tokenInput.inputValue();
     await page.getByRole("button", { name: "Hide token" }).click();
     expect(clientToken).toMatch(/^pct_[A-Za-z0-9_-]{32,128}$/);
+    expect(
+      (await page.locator("pre code").allTextContents()).join("\n"),
+    ).not.toContain(clientToken);
 
     expect(
       await cli(["connect", "postgres", "--tenant", cliTenant]),
@@ -328,26 +451,32 @@ test("a registered and activated account connects the local CLI and reviews its 
     ).toBe("Old title");
   } finally {
     await content.query(`DROP SCHEMA IF EXISTS "${namespace}" CASCADE`);
-    await metadata.query(
-      `DELETE FROM "LocalContentPatch" WHERE "tenantId" = $1`,
-      [tenantId],
-    );
-    await metadata.query(`DELETE FROM "ApiKey" WHERE "tenantId" = $1`, [
-      tenantId,
-    ]);
-    await metadata.query(`DELETE FROM "Membership" WHERE "tenantId" = $1`, [
-      tenantId,
-    ]);
-    await metadata.query(`DELETE FROM "Role" WHERE "tenantId" = $1`, [
-      tenantId,
-    ]);
+    if (provisionedTenantId) {
+      await metadata.query(
+        `DELETE FROM "LocalContentPatch" WHERE "tenantId" = $1`,
+        [provisionedTenantId],
+      );
+      await metadata.query(`DELETE FROM "ApiKey" WHERE "tenantId" = $1`, [
+        provisionedTenantId,
+      ]);
+      await metadata.query(`DELETE FROM "Membership" WHERE "tenantId" = $1`, [
+        provisionedTenantId,
+      ]);
+      await metadata.query(`DELETE FROM "Role" WHERE "tenantId" = $1`, [
+        provisionedTenantId,
+      ]);
+    }
     await metadata.query(
       `DELETE FROM "RefreshToken" WHERE "userId" IN (
       SELECT "id" FROM "User" WHERE "email" = $1
     )`,
       [email],
     );
-    await metadata.query(`DELETE FROM "Tenant" WHERE "id" = $1`, [tenantId]);
+    if (provisionedTenantId) {
+      await metadata.query(`DELETE FROM "Tenant" WHERE "id" = $1`, [
+        provisionedTenantId,
+      ]);
+    }
     await metadata.query(`DELETE FROM "User" WHERE "email" = $1`, [email]);
     await metadata.query(
       `DELETE FROM "PortalOtpCode" WHERE "emailNormalized" = $1`,

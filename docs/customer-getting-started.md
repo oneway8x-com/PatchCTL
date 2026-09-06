@@ -1,40 +1,49 @@
 # New customer guide: from account to your first reviewed content change
 
-This guide describes the current PatchCTL v0.1 implementation, not a planned onboarding UI.
-The example task is **add English summaries to articles that do not have one**.
+This guide describes the current PatchCTL v0.1 implementation. The example task is **add English
+summaries to articles that do not have one**.
 
 ## Before you start: what works today
 
-**Onboarding is operator-assisted today.** Email verification creates a user account, but it
-does not create a Tenant, assign membership, connect a database, or issue an agent key.
-There is no customer-facing Tenant/source/key setup wizard yet.
+**Account and Tenant onboarding is automatic.** On the first successful email verification,
+PatchCTL creates the user and, when the user has no existing membership, creates a personal Tenant
+with an OWNER membership. Later sign-ins reuse an existing membership instead of creating another
+Tenant. The dashboard shows the active Tenant name and ID plus the commands for connecting the
+local CLI. Database connection and scoped client-token creation remain explicit steps; PatchCTL
+does not automatically connect a database or expose a token in a command or URL.
 
-The default source commands connect **directly from the local CLI runtime to
+The default source workflow connects **directly from the local CLI runtime to
 Postgres**. The OS credential backend owns the customer DSN; normal PatchCTL config
 contains only a credential reference and non-secret source metadata:
 
 ```text
 Your CLI / coding agent -> local credential store -> your Postgres
-Your CLI / coding agent -> non-secret workflow data -> PatchCTL API
+Your CLI / coding agent -> selected values and schema metadata -> PatchCTL review API
+Your browser             -> human review of the exact immutable proposal
 ```
 
-Start local source discovery with `patchctl connect postgres`, `patchctl sources`,
-and `patchctl schema <local-source>`. The hosted service does not receive this DSN.
-See the [local CLI guide](local-cli.md) for the implemented local read/draft slice.
+The hosted service never receives or resolves the DSN. Selected before/after values and schema
+metadata do leave the machine when you submit a proposal for browser review. Treat that payload as
+potentially sensitive customer content even though it contains no database credential.
 
-The complete proposal/review/apply walkthrough below still describes the **legacy
-hosted compatibility path** while local submission and apply migration is incomplete:
+The implemented local-first path is `connect postgres` → `init` → `list`/`get` → `patch start` →
+`update` → `diff`/`validate` → `login --server` → `submit` → browser approval or rejection. See the
+[local CLI guide](local-cli.md) for detailed command behavior and storage boundaries.
+
+**Local apply is not implemented.** Browser approval records a human decision on the exact
+immutable proposal, but it does not write the approved values to Postgres. The optional
+compatibility walkthrough later in this guide uses the separate legacy hosted path when you need
+to exercise the existing server-side apply flow:
 
 ```text
 Your CLI / coding agent -> patchctl server ... -> PatchCTL API -> proposed patch
 Your browser             -> human review -> approved compatibility apply -> Postgres
 ```
 
-Every hosted CLI invocation below therefore uses the explicit `server` namespace,
-and the operator must explicitly enable `PATCHCTL_LEGACY_SERVER_CONTENT=1`. This path
-uses a separately configured server credential; it never receives or resolves the
-credential stored by `patchctl connect postgres`. It is migration protection, not
-the default architecture.
+Every compatibility CLI invocation uses the explicit `server` namespace, and the operator must
+enable `PATCHCTL_LEGACY_SERVER_CONTENT=1` on the server. That path uses a separately configured
+server credential; it never receives or resolves the credential stored by
+`patchctl connect postgres`. It is migration protection, not the default architecture.
 
 You need:
 
@@ -42,14 +51,15 @@ You need:
   a verified hosted signup address or production deployment runbook.
 - An email address for your human account.
 - An existing supported Postgres content table. Start with a development copy, not live content.
-- An operator to complete Steps 2–3. If you self-host, you fill that role too.
+- An operator only if you use the optional compatibility setup in Step 3. If you self-host, you
+  fill that role too.
 - Git, Node.js >=22.19, pnpm 10.26, and PowerShell 7.1+ for the commands below.
 
 Want to try the workflow without connecting your own database? Follow the
 [local Docker demo](local-development.md) instead. It provisions a synthetic Tenant, reviewer,
-agent key, and articles. Use the email printed by that setup; signing in with a different new
-email does not grant access to the demo Tenant. Docker is needed for that demo, not for a CLI
-that talks to an already-running service.
+agent key, and articles. Use the email printed by that setup to access the demo Tenant; signing in
+with a different new email creates that account's own personal Tenant instead. Docker is needed
+for the demo, not for a CLI that talks to an already-running service.
 
 ## 1. Register your human account
 
@@ -57,36 +67,48 @@ that talks to an already-running service.
 2. Enter your email and click **Continue with email**.
 3. Enter the six-digit code and click **Continue**. Your user is created on first successful
    verification; there is no separate password registration form.
-4. Open `<your-instance-url>/patches` directly after verification. The current login screen
-   still uses legacy branding and redirects to `/dashboard`, which is not the PatchCTL queue.
+4. After verification, PatchCTL redirects to `<your-instance-url>/dashboard`.
 
 On an operator-configured production instance, codes are sent by email. During local development,
 codes appear in the server terminal instead. Never post a code or server log in an issue/chat.
 Codes expire after 15 minutes; wait for the resend cooldown if a new one is needed.
 
-**Expected at this stage:** you have a user account, but a completely new user cannot access
-PatchCTL content yet. A successful login is not proof of Tenant membership or source access.
+**Expected at this stage:** the dashboard shows your active Tenant name and Tenant ID. A new account
+receives one personal Tenant and OWNER membership. This grants access to PatchCTL review features;
+it does not grant access to a database until you connect one locally.
 
-## 2. Ask the operator to activate your Tenant
+## 2. Review your Tenant and dashboard CLI guide
 
-Send the operator your registered email and your intended Tenant name through your normal
-support channel. A **Tenant** is the account boundary that owns your sources, permissions,
-patches, and audit history.
+A **Tenant** is the hosted account boundary that owns permissions, patches, and audit history. On
+the dashboard, confirm the active Tenant name and copy its ID when you need to identify that hosted
+boundary. Do not insert arbitrary Tenant IDs into browser storage, request headers, or tokens.
 
-The operator must provision an active Tenant and membership for your user, with an appropriate
-role. For the first self-managed account, an OWNER/ADMIN role normally provides configuration,
-review, and apply permissions; explicit permission denials still take precedence.
+The **Connect your local CLI** card previews the workflow and the exact commands for this Tenant.
+Build the CLI in Step 4 before executing them, then follow the complete local-first flow in Step 5:
 
-There is no supported self-service Tenant creation command/UI in this checkout. The operator
-must arrange metadata provisioning; do not insert arbitrary Tenant IDs into browser storage,
-request headers, or tokens to bypass this step.
+1. `pnpm patchctl connect postgres --tenant <local-alias>` creates a local connection profile. The
+   value after `--tenant` is a local profile alias, not the hosted Tenant ID shown above it.
+2. `pnpm patchctl init` selects the tables and columns the CLI may read.
+3. The card can create a one-connection scoped client token. The displayed
+   `pnpm patchctl login --server <your-instance-url>` command pairs the profile after you paste the
+   token at its hidden prompt. The dashboard never embeds the raw token in a command or URL.
+4. The remaining commands prepare, validate, and submit an immutable proposal.
 
-After membership is provisioned, **sign out and sign in again** so your new access token carries
-the Tenant. Refreshing the old session alone does not pick up a previously missing Tenant.
-If you belong to multiple Tenants, ask the operator to verify the intended active Tenant;
-the current login flow selects a membership and has no customer Tenant-switching UI.
+The token can submit proposals for its paired connection but cannot approve them. Database
+credentials stay in the local operating-system credential backend. Approval records a human
+review decision, but local apply is not implemented and does not write the approved values back to
+Postgres.
 
-## 3. Compatibility-only hosted connection — operator-assisted
+If the account already belongs to one or more Tenants, sign-in deterministically reuses an existing
+membership and does not create an extra personal Tenant. The current login flow has no
+customer-facing Tenant switcher, so ask the instance operator to verify the intended membership if
+the selected Tenant is not the one you expected.
+
+## 3. Optional legacy hosted connection — operator-assisted
+
+Skip this section when you only need the default local-first proposal and browser-review flow.
+Use it only to exercise the separately enabled compatibility apply path while local apply remains
+unimplemented.
 
 Tell the operator which database/table you want to manage and which fields may be edited.
 For the example in this guide, request:
@@ -119,13 +141,15 @@ The operator then completes this checklist:
 6. Retest with `POST /api/patchctl/sources/{id}/test` and confirm discovery/reads work for your
    Tenant. A successful connection test alone does not verify every apply/receipt permission;
    verify one reviewed change in the development database before using live content.
-7. Issue an expiring, revocable agent key owned by your active user, with **read/propose only**
-   and an explicit list containing this source ID. Key issuance is currently operator provisioning,
-   not a customer API/UI. See [operator setup](patchctl-setup.md) for its storage requirements.
+7. Issue an expiring, revocable legacy agent key owned by your active user, with **read/propose
+   only** and an explicit list containing this source ID. Legacy key issuance is currently operator
+   provisioning, not a customer API/UI. This is separate from the local-client token a configured
+   human can create in `/patches`. See [operator setup](patchctl-setup.md) for storage requirements.
 
 The operator should return the **service URL**, **source ID**, **configured field names**, and
-**agent key plus expiry**, delivering the key privately. Your database connection URL is not
-needed by the CLI.
+**legacy agent key plus expiry**, delivering the key privately. Your database connection URL is not
+needed by the compatibility CLI; the separate default local-first path uses its own locally stored
+credential.
 
 ### Example source configuration for the operator
 
@@ -179,7 +203,7 @@ Use the repository revision compatible with your running instance. If you do not
 yet, clone it first:
 
 ```powershell
-git clone https://github.com/hadoan/PatchCTL.git
+git clone https://github.com/oneway8x-com/PatchCTL.git
 cd PatchCTL
 ```
 
@@ -194,11 +218,85 @@ node apps/cli/dist/cli.js --help
 $cli = (Resolve-Path 'apps/cli/dist/cli.js').Path
 ```
 
-This guide runs the built executable directly; it does not assume
-a published npm package or global `patchctl` installation. You do not need Prisma migrations or
-database credentials merely to run this CLI against an existing instance.
+This guide runs the built executable directly; it does not assume a published npm package or global
+`patchctl` installation. You do not need Prisma migrations to use the CLI. The default local-first
+path does require the Postgres credential on this machine; the optional compatibility commands in
+Steps 6–11 instead use a server-owned database credential.
 
-## 5. Configure your CLI connection
+## 5. Create and submit a local-first proposal
+
+Use the local-first path unless you explicitly need the legacy apply flow. Connect to a development
+copy of your database first. The connection prompt is hidden, and PatchCTL stores the DSN in the OS
+credential backend—not in its JSON config or the review service:
+
+```powershell
+node $cli connect postgres --tenant my-project
+node $cli sources
+node $cli init --resources public.articles --columns id,title,body,summary_en
+node $cli resources
+node $cli schema my-project articles
+node $cli list articles --limit 10
+```
+
+`init` is required because PatchCTL selects no resources or columns by default. Include the
+single-column primary key and every field needed for review. Reconnecting clears this selection,
+because the new credential may point to a different database. Only selected values are returned,
+although the conflict hash covers the full row.
+
+Create one local draft and add the intended changes. Set `$articleId` and replace the sample
+summary with values reviewed against the record returned by `list` or `get`:
+
+```powershell
+$articleId = '<article-id-from-list-or-get>'
+node $cli patch start --title 'Add an English article summary'
+node $cli update articles $articleId --set 'summary_en=Your article-specific summary.'
+node $cli diff
+node $cli validate
+```
+
+These commands do not write content. The draft stores selected before/after customer values under
+the local PatchCTL configuration directory, so protect it like other customer data. `validate`
+checks the current schema, selected fields, types, relations, baseline, and whole-record conflict
+hash at that point in time.
+
+To submit the immutable proposal for human review:
+
+1. Sign in to `<your-instance-url>/dashboard` as the human who owns the active Tenant.
+2. In **Connect your local CLI**, create a scoped client token and copy it immediately. It is
+   shown only in that browser session. The same guide is also available from `/patches`.
+3. Pair this local CLI. Enter the token at the hidden prompt; do not put it on the command line:
+
+   ```powershell
+   node $cli login --server 'https://your-patchctl-instance.example'
+   ```
+
+4. Submit the validated draft and open the returned review URL:
+
+   ```powershell
+   $submissionJson = node $cli submit
+   if ($LASTEXITCODE -ne 0) { throw 'Submission failed; inspect the error before retrying.' }
+   $submission = ($submissionJson -join "`n") | ConvertFrom-Json
+   $submission.reviewUrl
+   ```
+
+The scoped local-client token can submit for its one connection but cannot approve. PatchCTL stores
+that token in the OS credential backend unless `PATCHCTL_TOKEN` was explicitly supplied as a
+process-only override. Normal config stores only the server origin, Tenant ID, connection ID, and
+credential references.
+
+Submission revalidates the current local schema and record snapshots, freezes the proposal, and
+sends its selected before/after values plus schema metadata to the review service. It never sends
+the Postgres DSN or local-client token. After submission, the local draft is immutable.
+
+A human with `review` permission opens the returned URL, checks every before/after value and the
+exact revision, and chooses **Approve** or **Reject**. Approval currently stops there: no local
+`sync` or apply command exists, and approval does not modify Postgres. Use the optional compatibility
+path below only when you deliberately need to test the existing server-side apply implementation.
+
+## 6. Configure the optional compatibility CLI connection
+
+Everything from this section through Step 11 uses the optional `patchctl server ...` path and
+requires the operator setup from Step 3. It is not part of the default local-first proposal flow.
 
 In the same PowerShell terminal, enter the service origin supplied by the operator. Use only
 scheme/host/port, without `/api`, a path, query string, or embedded credentials.
@@ -221,7 +319,7 @@ upload environment dumps. Never substitute your browser's human token for the ag
 an `id`. An empty array means no sources are visible; ask the operator to check the key's source
 assignment rather than guessing IDs.
 
-## 6. Inspect the content schema and read articles
+## 7. Inspect the compatibility content schema and read articles
 
 Copy the correct ID from `sources`:
 
@@ -238,7 +336,7 @@ conflict checks: preserve them exactly; never invent or recalculate them yoursel
 For this example, `summary_en` must be editable and `body` readable. If your fields differ,
 adapt the following query and proposal to the registered schema.
 
-## 7. Find articles missing an English summary
+## 8. Find articles missing an English summary through compatibility reads
 
 Keep exported customer content and proposal files outside the public repository in a private
 local folder. These files may contain sensitive content even though they contain no API key.
@@ -263,7 +361,7 @@ needed. If `nextCursor` is not null, there are more results. Complete this small
 repeat the same filtered query with `--after <returned-nextCursor>` to continue. Each patch is
 reviewed/applied separately; a large job is not one atomic transaction.
 
-## 8. Prepare a proposal — no database writes yet
+## 9. Prepare a compatibility proposal — no database writes yet
 
 Write the summaries yourself, or give your coding agent the exported records and this instruction:
 
@@ -318,7 +416,7 @@ $proposal.reviewUrl
 value, and version checks and saves a pending patch. **Neither command changes article content.**
 Keep `submission.json` so you can find the patch again.
 
-## 9. Review and approve in the browser
+## 10. Review and apply through the compatibility browser flow
 
 1. Open the returned `reviewUrl` in your normal browser on the same PatchCTL instance.
 2. Sign in as your human account if necessary, then reopen the link.
@@ -336,7 +434,7 @@ Proposals are immutable: to change proposed text, reject it and prepare a fresh 
 On apply, changed/deleted records, schema drift, or changed relation targets block the batch.
 Do not force an old proposal through; reread the data and prepare a new human-reviewed revision.
 
-## 10. Verify the result and continue managing content
+## 11. Verify the compatibility result and continue managing content
 
 In the same terminal:
 
@@ -378,28 +476,44 @@ your own data policy.
 
 ## Troubleshooting and current onboarding gaps
 
-| Symptom                                       | What to check                                                                                                                                                               |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Login succeeds but the queue is unavailable   | Tenant/membership is not provisioned, the token predates membership, or the server JWT configuration is inconsistent. Ask the operator, then sign out/in.                   |
-| No verification email                         | Local development logs codes to the terminal; an email-delivering instance needs working operator email configuration. Do not keep requesting codes rapidly.                |
-| CLI 401 / exit 3                              | Missing, expired, revoked, or incorrect key; inactive owning user/Tenant. Ask for a valid scoped key.                                                                       |
-| CLI 403 / exit 3                              | Insufficient permissions or source not assigned to this key. Do not replace it with a human token.                                                                          |
-| `sources` is empty or reads return no records | Verify source assignment, selected database/table, exact Tenant mapping, and filters. Empty content is not a reason to weaken isolation.                                    |
-| Local validation fails / exit 2               | Check JSON, placeholders, schema version, record versions, required fields, and input size.                                                                                 |
-| Schema/connection failure                     | Operator checks database reachability, allowlist compatibility, role grants, and receipt setup.                                                                             |
-| Conflict / exit 4                             | Reread affected content; create a new proposal and obtain a new human decision.                                                                                             |
-| Timeout/network/server failure / exit 5       | The CLI does not retry automatically. A failed response does not prove a write/proposal did not happen. Check the queue/status/history first.                               |
-| Patch remains `applying`                      | Ask an authorized human/operator to follow [receipt recovery](patchctl-apply.md) for the same approved patch ID/revision. Do not submit duplicates or manually reset state. |
+| Symptom                                          | What to check                                                                                                                                                               |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard has no active Tenant                   | Sign out and verify the email again. If provisioning still fails, ask the operator to inspect account provisioning and metadata database health.                            |
+| No verification email                            | Local development logs codes to the terminal; an email-delivering instance needs working operator email configuration. Do not keep requesting codes rapidly.                |
+| CLI 401 / exit 3                                 | Missing, expired, revoked, or incorrect key; inactive owning user/Tenant. Ask for a valid scoped key.                                                                       |
+| CLI 403 / exit 3                                 | Insufficient permissions or source not assigned to this key. Do not replace it with a human token.                                                                          |
+| Local `resources` is empty                       | Run `init` and explicitly select supported tables and columns; reconnecting clears prior selections.                                                                        |
+| Compatibility `server sources` is empty          | Ask the operator to verify the legacy key's source assignment rather than guessing IDs.                                                                                     |
+| Local validation fails / exit 2                  | Check that the patch has an update and that selected schema, field types, relations, baselines, and current record state still match.                                       |
+| Compatibility validation fails / exit 2          | Check proposal JSON, placeholders, schema version, record versions, required fields, and input size.                                                                        |
+| Local schema/connection failure                  | Check the locally stored DSN, database reachability, TLS, least-privilege grants, and selected resources.                                                                   |
+| Compatibility schema/connection failure          | The operator checks server database reachability, allowlist compatibility, role grants, and receipt setup.                                                                  |
+| Conflict / exit 4                                | Reread affected content; create a new proposal and obtain a new human decision.                                                                                             |
+| Local proposal is approved but data is unchanged | Expected today: local apply/`sync` is not implemented. Approval records a decision but does not write Postgres.                                                             |
+| Timeout/network/server failure / exit 5          | The CLI does not retry automatically. A failed response does not prove a write/proposal did not happen. Check the queue/status/history first.                               |
+| Compatibility patch remains `applying`           | Ask an authorized human/operator to follow [receipt recovery](patchctl-apply.md) for the same approved patch ID/revision. Do not submit duplicates or manually reset state. |
 
-The missing self-service pieces are Tenant provisioning, database-secret/source onboarding, and
-agent-key creation/revocation UI/API. Account verification alone does not finish those steps.
-Until they are implemented, use the operator-assisted path above or the isolated local demo.
+Personal Tenant provisioning is automatic for an account with no existing membership;
+customer-facing Tenant switching is not implemented. For the default local-first path, customers
+can connect Postgres and select resources in the CLI, and the personal Tenant OWNER can create a
+one-connection local-client token from `/dashboard` or `/patches`. Self-service token listing,
+expiry, and revocation are not implemented yet. The optional legacy path still requires
+operator-managed server database secrets, source/schema registration, and legacy agent-key
+provisioning.
 
 ## Implementation references
 
-This guide was checked against the current account [UI](../apps/app/src/components/auth/auth-card.tsx)
-and [server](../apps/app/src/server/auth.ts), [source/schema routes](../apps/app/app/api/patchctl/sources/route.ts),
-[source/schema use cases](../packages/modules/patches/src/use-cases/schema.ts),
-[agent authorization](../packages/modules/patches/src/access.repository.ts), and
-[CLI implementation](../apps/cli/src/cli.ts). See also [CLI usage](../apps/cli/README.md) and
+This guide was checked against the current account [UI](../apps/app/src/components/auth/auth-card.tsx),
+[server](../apps/app/src/server/auth.ts), and
+[provisioning use case](../apps/app/src/server/auth-provisioning.ts); the
+[dashboard](../apps/app/src/modules/dashboard/screens/DashboardHome.tsx) and
+[CLI connection guide](../apps/app/src/modules/patches/components/LocalClientConnectionGuide.tsx);
+[local CLI commands](../apps/cli/src/cli.ts),
+[local draft commands](../apps/cli/src/local/patch-commands.ts),
+[local submission](../apps/cli/src/local/server-commands.ts), and
+[local proposal/review use cases](../packages/modules/patches/src/local-patches.ts). The optional
+compatibility path uses the [source/schema routes](../apps/app/app/api/patchctl/sources/route.ts),
+[source/schema use cases](../packages/modules/patches/src/use-cases/schema.ts), and
+[agent authorization](../packages/modules/patches/src/access.repository.ts). See also
+[local CLI behavior](local-cli.md), [CLI usage](../apps/cli/README.md), and
 [shared-client architecture](patchctl-client.md).

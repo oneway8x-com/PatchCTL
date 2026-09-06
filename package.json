@@ -15,6 +15,7 @@
     "local:agent": "node scripts/patchctl-local.mjs agent",
     "local:stop": "node scripts/patchctl-local.mjs stop",
     "local:test": "pnpm --filter patchctl build && node --test scripts/patchctl-local.test.mjs",
+    "patchctl": "node apps/cli/dist/cli.js",
     "marketing": "node scripts/marketing/cli.mjs",
     "marketing:test": "node --test scripts/marketing/__tests__/*.test.mjs",
     "prepare": "husky",
