@@ -46,14 +46,16 @@ After changing shared contracts or API-client source, run `pnpm build:packages` 
 both the CLI and browser consume the API client's compiled exports.
 See [CLI usage](../apps/cli/README.md) for running it without the local helper.
 
-In another terminal:
+In another terminal, use the explicit `server` namespace. This synthetic demo
+intentionally protects the legacy server-connected workflow during migration; it
+is not the default local-first source architecture:
 
 ```powershell
-pnpm local:agent sources
-pnpm local:agent schema <source-id-from-local-info>
-'{"filters":[{"field":"summary_en","op":"missing"}]}' | node scripts/patchctl-local.mjs agent read <source-id-from-local-info> --stdin
-pnpm local:agent validate --file proposal.json
-pnpm local:agent propose --file proposal.json
+pnpm local:agent server sources
+pnpm local:agent server schema <source-id-from-local-info>
+'{"filters":[{"field":"summary_en","op":"missing"}]}' | node scripts/patchctl-local.mjs agent server read <source-id-from-local-info> --stdin
+pnpm local:agent server validate --file proposal.json
+pnpm local:agent server propose --file proposal.json
 ```
 
 Give your agent the task **Add English summaries to all articles missing one**, with the records

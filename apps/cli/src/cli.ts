@@ -2,7 +2,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { localCommands, runLocal } from "./local/commands.js";
-import { configDirectory, readConfig } from "./local/config.js";
 import { runPatchCommand } from "./local/patch-commands.js";
 import { runServerCommand } from "./local/server-commands.js";
 import {
@@ -16,11 +15,12 @@ import {
 
 const help = `patchctl — prepare content changes for human review
 
-Commands:
-  connect [--tenant NAME]
+Local-first commands (PostgreSQL credentials stay on this machine):
+  connect postgres [--tenant NAME]
+  sources
   init --resources public.articles --columns id,title
+  schema [SOURCE [RESOURCE]]
   resources
-  schema [RESOURCE]
   list RESOURCE [--limit 20]
   get RESOURCE ID
   agent-guide
@@ -31,23 +31,22 @@ Commands:
   validate
   login --server ORIGIN
   submit
-  sync
 
-Legacy server commands (schema uses local configuration when connected):
-  sources
-  schema SOURCE_ID
-  targets SOURCE_ID FIELD [--after ID]
-  read SOURCE_ID [--file query.json | --stdin] [--after ID] [--limit 50]
-  validate --file patch.json | --stdin
-  propose --file patch.json | --stdin
-  status PATCH_ID
-  history PATCH_ID [--after EVENT_ID]
+Hosted compatibility commands (explicit server namespace; server owns its DSN):
+  server sources
+  server schema SOURCE_ID
+  server targets SOURCE_ID FIELD [--after ID]
+  server read SOURCE_ID [--file query.json | --stdin] [--after ID] [--limit 50]
+  server validate --file patch.json | --stdin
+  server propose --file patch.json | --stdin
+  server status PATCH_ID
+  server history PATCH_ID [--after EVENT_ID]
 
 All results are JSON (--json is also accepted). Local validate checks the active draft
-against PostgreSQL. Legacy validate --file/--stdin checks local structure only;
-legacy propose also verifies the server-side schema, permissions and record values.
-Set PATCHCTL_URL to the service origin and PATCHCTL_TOKEN to a scoped agent key.
-Source content changes only after human review in the returned review URL.
+against PostgreSQL. Compatibility validate checks local structure only; compatibility
+propose also verifies the server-side schema, permissions and record values. Set
+PATCHCTL_URL and PATCHCTL_TOKEN only for explicit server commands. Source content
+changes only after human review in the returned review URL.
 `;
 class CliError extends Error {
   constructor(
@@ -144,7 +143,8 @@ export async function run(
   }: RunOptions = {},
 ): Promise<number> {
   try {
-    if (!args.includes("--help") && ["login", "submit", "sync"].includes(args[0])) return runServerCommand(args, { env, stdout, stderr });
+    if (!args.includes("--help") && ["login", "submit"].includes(args[0]))
+      return runServerCommand(args, { env, stdout, stderr });
     if (
       !args.includes("--help") &&
       (["patch", "update", "diff"].includes(args[0]) ||
@@ -153,19 +153,21 @@ export async function run(
           !args.includes("--stdin")))
     )
       return runPatchCommand(args, { env, stdout, stderr });
-    if (
-      !args.includes("--help") &&
-      (localCommands.includes(args[0]) ||
-        (args[0] === "schema" &&
-          Boolean((await readConfig(configDirectory(env))).currentTenant)))
-    )
+    if (!args.includes("--help") && localCommands.includes(args[0]))
       return runLocal(args, { env, stdout, stderr });
-    const { positionals, options } = parse(args);
+    const isServerCompatibility = args[0] === "server";
+    const { positionals, options } = parse(
+      isServerCompatibility ? args.slice(1) : args,
+    );
     const [command, id, field] = positionals;
     if (!command || options.help) {
       stdout.write(help);
       return 0;
     }
+    if (!isServerCompatibility)
+      throw new CliError(
+        "Unknown command. Hosted compatibility commands require the server prefix. Run patchctl --help.",
+      );
     if (
       ![
         "sources",

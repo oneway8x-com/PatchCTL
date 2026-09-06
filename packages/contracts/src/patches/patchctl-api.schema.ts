@@ -36,15 +36,19 @@ export const PatchStateSchema = z.enum([
   "conflict",
   "failed",
 ]);
-export const PatchSourcesSchema = z.array(z.object({ id, name: z.string() }));
-export const PatchContentSchemaResponseSchema = z.object({
-  // Discovery is filtered to readable fields; configuration-only refinements do not apply.
-  definition: PatchContentSchemaInputSchema.innerType().extend({
-    fields: z.record(PatchIdentifierSchema, PatchContentFieldSchema),
-  }),
-  version: revision,
-  versionStrategy: z.literal("postgres-xmin-and-whole-row"),
-});
+export const PatchSourcesSchema = z.array(
+  z.object({ id, name: z.string() }).strict(),
+);
+export const PatchContentSchemaResponseSchema = z
+  .object({
+    // Discovery is filtered to readable fields; configuration-only refinements do not apply.
+    definition: PatchContentSchemaInputSchema.innerType().extend({
+      fields: z.record(PatchIdentifierSchema, PatchContentFieldSchema),
+    }),
+    version: revision,
+    versionStrategy: z.literal("postgres-xmin-and-whole-row"),
+  })
+  .strict();
 export const PatchContentPageSchema = z.object({
   records: z.array(z.object({ id, version, values: z.record(value) })),
   nextCursor: z.string().nullable(),

@@ -86,7 +86,7 @@ test("local agent launches apps/cli and forwards help and stdin validation", asy
       /patchctl.*prepare content changes for human review/,
     );
     const validation = invoke(
-      ["validate", "--stdin"],
+      ["server", "validate", "--stdin"],
       JSON.stringify({
         sourceId: "e1bf2bb3-d983-4a69-b387-1f93124c1a24",
         schemaVersion: "a".repeat(64),

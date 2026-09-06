@@ -68,7 +68,7 @@ The browser fetches/refetches HTTP data; the proposed executor would pull approv
 
 ### Local-first workflow, in order
 
-1. **Connect locally:** `connect --tenant NAME` prompts for a database URL, tests local access,
+1. **Connect locally:** `connect postgres --tenant NAME` prompts for a database URL, tests local access,
    and stores it in the OS credential store unless explicitly supplied by environment.
 2. **Select content:** `init` discovers supported tables and requires explicit table/column
    selection. `resources`, `schema`, `list`, and `get` read through `@patchctl/postgres`.
@@ -93,10 +93,10 @@ The browser fetches/refetches HTTP data; the proposed executor would pull approv
    but the CLI executor that calls it is missing. The intended client reports start and outcome
    for the exact approved revision; the API stores those reports and the web UI displays them.
 
-The current help text/UI mention `sync`, but `runServerCommand` rejects non-`submit` commands
-after its login branch. Do not treat the displayed command or an `APPROVED` status as evidence
-that content was applied. The local-flow browser test source stops after approval and asserts
-that the content database remains unchanged; it is not an execution/recovery test.
+`sync` is intentionally not exposed by the CLI until the local executor and recovery
+protocol are implemented. Do not treat an `APPROVED` status as evidence that content
+was applied. The local-flow browser test stops after approval and asserts that the
+content database remains unchanged; it is not an execution/recovery test.
 
 ### Local API surface in the working tree
 
@@ -118,14 +118,14 @@ it is not a verified server fingerprint of the remote database.
 
 ## 4. Local-first storage and trust boundaries
 
-| Data                          | Current location                                                                      | Important boundary                                                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| User database URL/password    | OS credential store, service `patchctl`, account `<local-name>/database`              | Available to the local process; not intentionally uploaded to the API.                                                    |
-| Headless database URL         | `PATCHCTL_DATABASE_URL` in the CLI environment                                        | Explicit override, not persisted by PatchCTL. Protect the environment from logs and unrelated processes.                  |
-| Server client token           | OS credential store account `<local-name>/server-token`, or `PATCHCTL_TOKEN` override | API stores its SHA-256 hash in `ApiKey`, not the plaintext token.                                                         |
-| Local configuration           | `~/.patchctl/config.json`, or under `PATCHCTL_HOME`                                   | Selected resources, current local name, database ID and server binding; no database password/token.                       |
-| Draft and frozen submission   | Local PatchCTL directory                                                              | Contains actual selected content. These files are sensitive even without connection credentials.                          |
-| Submitted patch/review/events | Metadata database `LocalContentPatch.document`                                        | Contains actual before/after content and schema metadata, not just hashes. No application-level encryption is added here. |
+| Data                          | Current location                                                                      | Important boundary                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| User database URL/password    | OS credential store, service `patchctl`, account `patchctl/source/<source-id>`        | Available to the local process; never included in PatchCTL config, output, proposals, or hosted API requests.              |
+| Headless database URL         | `PATCHCTL_DATABASE_URL` in the CLI environment                                        | Explicit override, not persisted by PatchCTL. Protect the environment from logs and unrelated processes.                   |
+| Server client token           | OS credential store account `<local-name>/server-token`, or `PATCHCTL_TOKEN` override | API stores its SHA-256 hash in `ApiKey`, not the plaintext token.                                                          |
+| Local configuration           | `~/.patchctl/config.json`, or under `PATCHCTL_HOME`                                   | Source ID/name/type, credential reference, selected resources, database ID and server binding; no database password/token. |
+| Draft and frozen submission   | Local PatchCTL directory                                                              | Contains actual selected content. These files are sensitive even without connection credentials.                           |
+| Submitted patch/review/events | Metadata database `LocalContentPatch.document`                                        | Contains actual before/after content and schema metadata, not just hashes. No application-level encryption is added here.  |
 
 “Database credentials stay local” does **not** mean “content never leaves the machine.”
 Submission uploads the selected before/after snapshots for affected records, including selected
