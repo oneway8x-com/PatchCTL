@@ -18,6 +18,7 @@ test("real CLI → ten English summaries → browser approval → Postgres; reje
         process.execPath,
         [
           fileURLToPath(new URL("../../../cli/dist/cli.js", import.meta.url)),
+          "server",
           ...args,
         ],
         {
