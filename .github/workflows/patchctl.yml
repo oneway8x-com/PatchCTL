@@ -24,6 +24,7 @@ jobs:
       DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
       PATCHCTL_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
       PATCHCTL_LOCAL_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
+      PATCHCTL_CONTENT_TEST_DATABASE_URL: postgresql://patchctl_test:isolated_ci_only@127.0.0.1:5432/patchctl_test
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +53,7 @@ jobs:
           pnpm exec tsx scripts/patchctl-demo.ts > /tmp/patchctl-demo-result.json
           node -e 'const fs=require("fs"); const result=JSON.parse(fs.readFileSync("/tmp/patchctl-demo-result.json","utf8")); fs.appendFileSync(process.env.GITHUB_ENV,"PATCHCTL_DEMO_SESSION="+result.sessionPath+"\n")'
       - run: pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl-demo.config.ts
+      - run: pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl-local.config.ts
       - run: pnpm build
       - uses: actions/upload-artifact@v4
         if: failure()
