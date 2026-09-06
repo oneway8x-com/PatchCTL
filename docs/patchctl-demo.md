@@ -39,6 +39,39 @@ pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl-demo
 
 The test launches the local app on port 3108, invokes the actual CLI, checks exactly ten proposed updates and unchanged database values before approval, signs the browser into the seeded human account, reviews and applies, and checks database changes and provenance. It also rejects a second patch without writes and introduces a conflicting edit to block a third patch atomically. Screenshots are in `apps/e2e/.patchctl-results/demo`.
 
+## Automated account-to-local-CLI walkthrough
+
+The local-first suite uses the same isolated session only to start the application and select the
+metadata database. It registers a unique account through the real passwordless browser form,
+confirms that the new user has no Tenant access, performs the supported operator activation fixture,
+and signs in again so the new session carries the Tenant. The authorized human then creates a
+one-time local-client token in `/patches` and the built CLI runs this flow against a unique local
+Postgres schema:
+
+```text
+patchctl connect postgres --tenant <test-account>
+patchctl init --resources <test-schema>.articles --columns id,title
+patchctl login --server http://127.0.0.1:3110
+patchctl patch start --title "Account E2E title update"
+patchctl update articles 1 --set "title=New title"
+patchctl diff
+patchctl validate
+patchctl submit
+```
+
+Run it after creating `PATCHCTL_DEMO_SESSION` as described above. The content database URL must be a
+disposable loopback database whose name ends in `_test` or `_demo`:
+
+```powershell
+$env:PATCHCTL_CONTENT_TEST_DATABASE_URL=$env:PATCHCTL_TEST_DATABASE_URL
+pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl-local.config.ts
+```
+
+This suite creates no self-service Tenant activation path and does not send the content database URL
+to the server. It rewrites only the isolated OTP fixture row instead of depending on external email,
+then removes the account, Tenant, token, patch metadata, content schema, and temporary CLI state. It
+also proves that approval leaves the source row unchanged because local apply/sync is not implemented.
+
 ## Manual live-agent walkthrough
 
 Start the server in one terminal:
