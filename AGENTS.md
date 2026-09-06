@@ -30,8 +30,9 @@ Run pnpm commands from this repository root, not from a nested source directory.
   tests, and local commits. A direct maintainer request is sufficient; an issue, assignee, PR,
   second reviewer, and team meeting are not prerequisites.
 - Follow the maintainer's selected branch. For an explicitly requested main-branch batch, work
-  sequentially on `main`, verify each ticket, and make small, descriptive commits. Otherwise,
-  use `codex/<issue>-<summary>` or `codex/<summary>` when a new branch is appropriate.
+  sequentially on `main`, verify each ticket, and make small, descriptive commits. Otherwise, use a
+  short descriptive name such as `<issue>-<summary>` or `<summary>` when a new branch is appropriate;
+  do not add a `codex/` prefix.
 - Self-review every change. Maintainer review can happen later when requested; do not claim it
   already happened. Creating/pushing PRs, merging, publishing, and deploying are separate actions
   that must be within the user's request. Repository rules and branch protection still apply.
