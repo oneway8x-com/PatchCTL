@@ -7,7 +7,10 @@ import {
 } from "./credentials.js";
 import {
   configDirectory,
+  credentialReference,
+  legacyCredentialReference,
   readConfig,
+  sourceMetadata,
   tenantIdSchema,
   writeConfig,
 } from "./config.js";
@@ -24,12 +27,16 @@ import {
 export const localCommands = [
   "connect",
   "init",
+  "sources",
   "resources",
+  "schema",
   "list",
   "get",
   "agent-guide",
 ];
-export async function hiddenSecret(label = "PostgreSQL connection string"): Promise<string> {
+export async function hiddenSecret(
+  label = "PostgreSQL connection string",
+): Promise<string> {
   if (!process.stdin.isTTY || !process.stderr.isTTY)
     throw new LocalError(
       "CREDENTIAL_NOT_FOUND",
@@ -103,18 +110,18 @@ function parseLocal(args: string[]) {
     options[arg] = args[++index];
   }
   const command = positionals[0];
-  const expected =
+  const validPositionals =
     command === "get"
-      ? 3
+      ? positionals.length === 3
       : command === "list"
-        ? 2
+        ? positionals.length === 2
         : command === "schema"
-          ? positionals.length
-          : 1;
-  if (
-    positionals.length !== expected ||
-    (command === "schema" && positionals.length > 2)
-  )
+          ? positionals.length >= 1 && positionals.length <= 3
+          : command === "connect"
+            ? positionals.length === 1 ||
+              (positionals.length === 2 && positionals[1] === "postgres")
+            : positionals.length === 1;
+  if (!validPositionals)
     throw new LocalError("INVALID_INPUT", "Invalid command arguments.");
   for (const option of Object.keys(options)) {
     if (
@@ -147,7 +154,7 @@ export async function runLocal(
 ): Promise<number> {
   try {
     const {
-      positionals: [command, resourceName, id],
+      positionals: [command, firstArgument, secondArgument],
       options,
     } = parseLocal(args);
     if (command === "agent-guide") {
@@ -156,10 +163,11 @@ export async function runLocal(
           principle:
             "Credentials stay local. Agents propose. Humans approve. Local clients execute.",
           available: [
-            "connect --tenant NAME",
+            "connect postgres --tenant NAME",
+            "sources --json",
             "init --resources public.articles --columns id,title",
+            "schema NAME --json",
             "resources --json",
-            "schema articles --json",
             "list articles --json",
             "get articles ID --json",
             "patch start",
@@ -168,16 +176,47 @@ export async function runLocal(
             "validate --json",
           ],
           status:
-            "Local drafts, updates, diffs and validation are available. Local patch submission and sync are not implemented yet. Legacy server commands use a different execution model.",
+            "Local drafts, validation, and non-secret proposal submission are available. Local apply/sync is not implemented yet. Hosted server-owned-DSN commands require the explicit server namespace.",
         }) + "\n",
       );
       return 0;
     }
     const directory = configDirectory(env);
     const config = await readConfig(directory);
-    const tenant = tenantIdSchema.safeParse(
-      options["--tenant"] ?? config.currentTenant ?? "default",
-    );
+    if (command === "sources") {
+      const sources = Object.entries(config.tenants).map(
+        ([tenantId, local]) => {
+          const source = sourceMetadata(tenantId, local);
+          return { id: source.id, name: source.name, type: source.type };
+        },
+      );
+      stdout.write(JSON.stringify({ sources }) + "\n");
+      return 0;
+    }
+    let requestedTenant =
+      options["--tenant"] ?? config.currentTenant ?? "default";
+    let resourceName = firstArgument;
+    const id = secondArgument;
+    if (command === "schema" && firstArgument) {
+      const sourceEntry = Object.entries(config.tenants).find(
+        ([tenantId, local]) => {
+          const source = sourceMetadata(tenantId, local);
+          return (
+            tenantId === firstArgument ||
+            source.id === firstArgument ||
+            source.name === firstArgument
+          );
+        },
+      );
+      if (!sourceEntry)
+        throw new LocalError(
+          "SOURCE_NOT_FOUND",
+          "The requested local source is not configured.",
+        );
+      requestedTenant = sourceEntry[0];
+      resourceName = secondArgument;
+    }
+    const tenant = tenantIdSchema.safeParse(requestedTenant);
     if (!tenant.success)
       throw new LocalError(
         "INVALID_INPUT",
@@ -188,20 +227,35 @@ export async function runLocal(
       const fromEnvironment = Boolean(env.PATCHCTL_DATABASE_URL);
       const secret = env.PATCHCTL_DATABASE_URL ?? (await promptSecret());
       const warnings = await withDatabase(secret, privilegeWarnings);
+      const existing = config.tenants[tenantId];
+      const sourceId = existing
+        ? sourceMetadata(tenantId, existing).id
+        : randomUUID();
+      const source = {
+        id: sourceId,
+        name: tenantId,
+        type: "postgres" as const,
+        credentialRef: `patchctl/source/${sourceId}`,
+      };
       if (fromEnvironment)
         warnings.push(
           "Using PATCHCTL_DATABASE_URL only for this process; no credential was persisted. Prefer the OS keyring.",
         );
-      else await credentials.set(`${tenantId}/database`, secret);
+      else await credentials.set(source.credentialRef, secret);
       config.currentTenant = tenantId;
       // A new connection may point at an entirely different database. Require
       // explicit selection again rather than reusing the previous allowlist.
-      config.tenants[tenantId] = { resources: [], databaseId: randomUUID(), ...(config.tenants[tenantId]?.server ? { server: config.tenants[tenantId].server } : {}) };
+      config.tenants[tenantId] = {
+        source,
+        resources: [],
+        databaseId: randomUUID(),
+        ...(existing?.server ? { server: existing.server } : {}),
+      };
       await writeConfig(directory, config);
       stdout.write(
         JSON.stringify({
           ok: true,
-          tenantId,
+          source: { id: source.id, name: source.name, type: source.type },
           credentialStorage: fromEnvironment ? "environment" : "os-keyring",
           warnings,
         }) + "\n",
@@ -213,10 +267,12 @@ export async function runLocal(
         "CREDENTIAL_NOT_FOUND",
         "Run patchctl connect first.",
       );
+    const local = config.tenants[tenantId];
     const { secret, warnings } = await databaseCredential(
-      tenantId,
+      credentialReference(tenantId, local),
       credentials,
       env,
+      legacyCredentialReference(local),
     );
     const result = await withDatabase(secret, async (client) => {
       const discovered = await discoverResources(client);
@@ -298,18 +354,25 @@ export async function runLocal(
             columns: selectedColumns,
           };
         });
-        config.tenants[tenantId].resources = selections;
+        local.resources = selections;
         config.currentTenant = tenantId;
         await writeConfig(directory, config);
         return { resources: selectedResources(discovered, selections) };
       }
-      const resources = selectedResources(
-        discovered,
-        config.tenants[tenantId].resources,
-      );
+      const resources = selectedResources(discovered, local.resources);
       if (command === "resources")
         return { resources: resources.map((r) => ({ name: r.name })) };
-      if (command === "schema" && !resourceName) return { resources };
+      if (command === "schema" && !resourceName) {
+        const source = sourceMetadata(tenantId, local);
+        return {
+          ...(source
+            ? {
+                source: { id: source.id, name: source.name, type: source.type },
+              }
+            : {}),
+          resources,
+        };
+      }
       const resource = requireResource(resources, resourceName);
       if (command === "schema") return { resource };
       if (command === "get" || command === "list") {

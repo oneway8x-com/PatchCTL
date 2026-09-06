@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
-import { mkdtemp, writeFile, unlink, rmdir } from "node:fs/promises";
+import { mkdtemp, writeFile, unlink, rmdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "./dist/cli.js";
@@ -58,7 +58,7 @@ async function invoke(
 }
 test("local validation parses stdin without credentials or API calls", async () => {
   const result = await invoke(
-    ["validate", "--stdin"],
+    ["server", "validate", "--stdin"],
     JSON.stringify(proposal),
     undefined,
     {},
@@ -67,18 +67,75 @@ test("local validation parses stdin without credentials or API calls", async () 
   assert.equal(JSON.parse(result.stdout).affectedRecords, 1);
   assert.equal(result.calls.length, 0);
 });
+test("sources is local-first and never contacts the hosted API", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "patchctl-sources-test-"));
+  const credentialRef = "patchctl/source/e1bf2bb3-d983-4a69-b387-1f93124c1a24";
+  try {
+    await writeFile(
+      join(dir, "config.json"),
+      JSON.stringify({
+        currentTenant: "demo",
+        tenants: {
+          demo: {
+            source: {
+              id: "e1bf2bb3-d983-4a69-b387-1f93124c1a24",
+              name: "demo",
+              type: "postgres",
+              credentialRef,
+            },
+            resources: [],
+          },
+        },
+      }),
+    );
+    const result = await invoke(["sources", "--json"], "", undefined, {
+      PATCHCTL_HOME: dir,
+      PATCHCTL_URL: "https://must-not-be-called.test",
+      PATCHCTL_TOKEN: "must-not-be-sent",
+    });
+    assert.equal(result.code, 0);
+    assert.equal(result.calls.length, 0);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      sources: [
+        {
+          id: "e1bf2bb3-d983-4a69-b387-1f93124c1a24",
+          name: "demo",
+          type: "postgres",
+        },
+      ],
+    });
+    assert.ok(!result.stdout.includes(credentialRef));
+    assert.ok(!result.stdout.includes("must-not-be-sent"));
+    const shorthand = await invoke(["schema", "articles"], "", undefined, {
+      PATCHCTL_HOME: dir,
+      PATCHCTL_URL: "https://must-not-be-called.test",
+      PATCHCTL_TOKEN: "must-not-be-sent",
+    });
+    assert.equal(shorthand.code, 1);
+    assert.equal(shorthand.calls.length, 0);
+    assert.equal(JSON.parse(shorthand.stderr).error.code, "SOURCE_NOT_FOUND");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 test("reads a JSON file and rejects malformed JSON and flags", async () => {
   const dir = await mkdtemp(join(tmpdir(), "patchctl-cli-"));
   const file = join(dir, "proposal.json");
   try {
     await writeFile(file, JSON.stringify(proposal));
-    assert.equal((await invoke(["validate", "--file", file])).code, 0);
-    assert.equal((await invoke(["validate", "--stdin"], "{broken")).code, 2);
     assert.equal(
-      (await invoke(["validate", "--stdin", "--file", file])).code,
+      (await invoke(["server", "validate", "--file", file])).code,
+      0,
+    );
+    assert.equal(
+      (await invoke(["server", "validate", "--stdin"], "{broken")).code,
       2,
     );
-    assert.equal((await invoke(["sources", "--unknown"])).code, 2);
+    assert.equal(
+      (await invoke(["server", "validate", "--stdin", "--file", file])).code,
+      2,
+    );
+    assert.equal((await invoke(["server", "sources", "--unknown"])).code, 2);
   } finally {
     await unlink(file);
     await rmdir(dir);
@@ -86,7 +143,7 @@ test("reads a JSON file and rejects malformed JSON and flags", async () => {
 });
 test("submission returns review URL and sends credentials only in the authorization header", async () => {
   const result = await invoke(
-    ["propose", "--stdin"],
+    ["server", "propose", "--stdin"],
     JSON.stringify(proposal),
     {
       ok: true,
@@ -113,7 +170,7 @@ test("submission returns review URL and sends credentials only in the authorizat
 });
 test("read preserves pagination/filter inputs and uses only the read endpoint", async () => {
   const result = await invoke(
-    ["read", "source", "--stdin", "--after", "050", "--limit", "50"],
+    ["server", "read", "source", "--stdin", "--after", "050", "--limit", "50"],
     JSON.stringify({ filters: [{ field: "summary_en", op: "missing" }] }),
   );
   assert.equal(result.code, 0);
@@ -130,7 +187,7 @@ test("read preserves pagination/filter inputs and uses only the read endpoint", 
 test("reports authentication and conflict exit codes", async () => {
   assert.equal(
     (
-      await invoke(["sources"], "", {
+      await invoke(["server", "sources"], "", {
         ok: false,
         status: 401,
         json: async () => ({ code: "UNAUTHENTICATED" }),
@@ -140,7 +197,7 @@ test("reports authentication and conflict exit codes", async () => {
   );
   assert.equal(
     (
-      await invoke(["propose", "--stdin"], JSON.stringify(proposal), {
+      await invoke(["server", "propose", "--stdin"], JSON.stringify(proposal), {
         ok: false,
         status: 409,
         json: async () => ({ code: "STALE_RECORD" }),
@@ -153,7 +210,7 @@ test("reports authentication and conflict exit codes", async () => {
 test("rejects non-object read input before any request", async () => {
   for (const input of [null, [], "text", 1]) {
     const result = await invoke(
-      ["read", "source", "--stdin"],
+      ["server", "read", "source", "--stdin"],
       JSON.stringify(input),
     );
     assert.equal(result.code, 2);
@@ -164,7 +221,7 @@ test("rejects non-object read input before any request", async () => {
 
 test("narrows unknown API error bodies without changing HTTP exit codes", async () => {
   for (const body of [null, [], { detail: 123, code: false }]) {
-    const result = await invoke(["sources"], "", {
+    const result = await invoke(["server", "sources"], "", {
       ok: false,
       status: 403,
       json: async () => body,
@@ -178,6 +235,7 @@ test("narrows unknown API error bodies without changing HTTP exit codes", async 
 
 test("discovers relation targets without write requests and preserves pagination", async () => {
   const result = await invoke([
+    "server",
     "targets",
     "source",
     "category_id",
@@ -194,7 +252,7 @@ test("discovers relation targets without write requests and preserves pagination
 });
 test("does not retry network errors or print secret-bearing exception text", async () => {
   const result = await invoke(
-    ["sources"],
+    ["server", "sources"],
     "",
     new Error("private-token connection refused"),
   );
@@ -208,14 +266,14 @@ test("maps invalid JSON and response contracts to exit 5 without retry", async (
     new Response("not-json"),
     new Response(JSON.stringify({ unexpected: true })),
   ]) {
-    const result = await invoke(["sources"], "", response);
+    const result = await invoke(["server", "sources"], "", response);
     assert.equal(result.code, 5);
     assert.equal(JSON.parse(result.stderr).error.code, "INVALID_RESPONSE");
     assert.equal(result.calls.length, 1);
   }
 });
 test("offers no agent approval/apply override", async () => {
-  for (const command of ["approve", "apply", "sql", "delete"]) {
+  for (const command of ["approve", "apply", "sync", "sql", "delete"]) {
     const result = await invoke([command, "patch"]);
     assert.equal(result.code, 2);
     assert.equal(result.calls.length, 0);
@@ -224,7 +282,7 @@ test("offers no agent approval/apply override", async () => {
 test("rejects insecure remote origins and oversized input", async () => {
   assert.equal(
     (
-      await invoke(["sources"], "", undefined, {
+      await invoke(["server", "sources"], "", undefined, {
         PATCHCTL_URL: "http://example.test",
         PATCHCTL_TOKEN: "token",
       })
@@ -232,7 +290,8 @@ test("rejects insecure remote origins and oversized input", async () => {
     2,
   );
   assert.equal(
-    (await invoke(["validate", "--stdin"], "x".repeat(2_000_001))).code,
+    (await invoke(["server", "validate", "--stdin"], "x".repeat(2_000_001)))
+      .code,
     2,
   );
 });

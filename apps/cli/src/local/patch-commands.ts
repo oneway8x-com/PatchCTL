@@ -7,7 +7,12 @@ import {
   validateRelation,
   withDatabase,
 } from "@patchctl/postgres";
-import { configDirectory, readConfig } from "./config.js";
+import {
+  configDirectory,
+  credentialReference,
+  legacyCredentialReference,
+  readConfig,
+} from "./config.js";
 import {
   NativeCredentialStore,
   databaseCredential,
@@ -106,14 +111,20 @@ export async function runPatchCommand(
         return { patch: draft };
       }
       const draft = await readDraft(directory, tenantId);
-      if (draft.databaseId !== config.tenants[tenantId].databaseId) throw new LocalError("DATABASE_CHANGED", "This draft belongs to a previous connection. Recreate the draft after inspecting the new database.");
+      if (draft.databaseId !== config.tenants[tenantId].databaseId)
+        throw new LocalError(
+          "DATABASE_CHANGED",
+          "This draft belongs to a previous connection. Recreate the draft after inspecting the new database.",
+        );
       if (command === "patch") return { patch: draft };
       if (command === "diff")
         return { patchId: draft.id, operations: diffDraft(draft) };
+      const local = config.tenants[tenantId];
       const { secret, warnings } = await databaseCredential(
-        tenantId,
+        credentialReference(tenantId, local),
         credentials,
         env,
+        legacyCredentialReference(local),
       );
       return withDatabase(secret, async (client) => {
         const resources = selectedResources(

@@ -1,17 +1,22 @@
 # Local PostgreSQL CLI foundation
 
-This covers phases 1 and 2 of the local-first v0.1 migration. Local patch
-submission and `sync` are not implemented yet. The existing `propose`/review
-workflow uses server-side database access and is a separate legacy path.
+PatchCTL's default source architecture is local-first: the CLI runtime owns the
+customer Postgres connection, and the hosted service never receives that connection
+string. Non-secret proposal submission and human review are implemented; local apply
+and `sync` are not. The older hosted database read/propose/apply workflow is retained
+only through explicit `patchctl server ...` compatibility commands and a separately
+enabled server feature flag.
 
 Run from the repository root after `pnpm install --frozen-lockfile`:
 
 ```sh
 pnpm --filter patchctl build
-node apps/cli/dist/cli.js connect --tenant my-project
+node apps/cli/dist/cli.js connect postgres --tenant my-project
+node apps/cli/dist/cli.js sources --json
 node apps/cli/dist/cli.js init --resources public.articles --columns id,title,summary
+node apps/cli/dist/cli.js schema my-project --json
+node apps/cli/dist/cli.js schema my-project articles --json
 node apps/cli/dist/cli.js resources --json
-node apps/cli/dist/cli.js schema articles --json
 node apps/cli/dist/cli.js list articles --limit 20 --json
 node apps/cli/dist/cli.js get articles 123 --json
 node apps/cli/dist/cli.js patch start --title "Improve article title"
@@ -20,7 +25,8 @@ node apps/cli/dist/cli.js diff --json
 node apps/cli/dist/cli.js validate --json
 ```
 
-`connect` prompts for a hidden PostgreSQL connection string and tests it locally.
+`connect postgres` (or the retained `connect` shorthand) prompts for a hidden
+PostgreSQL connection string and tests it directly from the local runtime.
 It stores the secret through the OS keyring adapter. Reconnecting clears the
 selected resources, since the connection may now point at another database.
 `init` prompts for tables and columns when arguments are omitted in a terminal;
@@ -31,9 +37,14 @@ never automatically added later. Tables without a supported single-column
 primary key cannot be selected.
 
 Configuration is stored at `~/.patchctl/config.json`; `PATCHCTL_HOME` can select
-another local configuration directory. It contains the current Tenant and
-table/column selections. It contains no connection string or access token.
-The credential service is `patchctl`, with account `<tenant>/database`.
+another local configuration directory. It contains the current local source, stable
+source ID/name/type, selected table/column hints, synchronization binding when present,
+and an OS-credential reference such as `patchctl/source/<source-id>`. It contains no
+connection string, password, or access token. The credential value is stored under the
+`patchctl` OS credential service using that reference as its account key. Configs from
+the earlier `<tenant>/database` layout are atomically upgraded with a non-secret legacy
+reference; the next credential read copies the secret to its source-specific keyring
+account without writing it to disk.
 
 For headless use, explicitly supply `PATCHCTL_DATABASE_URL` through the process
 environment. This takes precedence over the keyring and produces a warning in
@@ -45,6 +56,9 @@ The native binding uses Windows Credential Manager and macOS Keychain. On Linux
 it prefers Secret Service and may use the kernel keyring if unavailable; a
 headless environment can use the explicit environment option above. Native
 round-trip behavior has been tested on Windows; macOS/Linux verification is pending.
+PatchCTL's guarantee is that its interfaces do not expose or upload the DSN; it
+cannot prevent a different fully privileged process running as the same OS user
+from reading machine-level secrets.
 See the [binding implementation](https://github.com/Brooooooklyn/keyring-node).
 
 ## Output contract
@@ -54,9 +68,13 @@ Successful results go to stdout; structured errors go to stderr with nonzero
 exit status. Interactive prompts go to stderr. `--json` never starts interactive
 resource selection. `connect` can still request its secret in a real terminal.
 
+- `sources`: configured local sources as `{ id, name, type }`; it does not
+  open the keyring, connect to Postgres, or make an HTTP request.
 - `resources`: `{ resources: [{ name: "public.articles" }], warnings: [] }`.
-- `schema [resource]`: resource metadata (or selected resources), including
-  fields, primary key, and relevant unique/check/foreign-key constraints.
+- `schema SOURCE [RESOURCE]`: connects directly from the local runtime and returns
+  selected source/resource metadata, including fields, primary key, and relevant
+  unique/check/foreign-key constraints. With no source argument it uses the current
+  local source; a single argument is always a source name or ID.
 - `list`: `{ resource, records, warnings }`; limit defaults to 20, maximum 1000.
 - `get`: `{ resource, record, warnings }`; missing records return `RECORD_NOT_FOUND`.
 - Errors: `{ ok: false, error: { code, message } }`.

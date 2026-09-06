@@ -1,7 +1,8 @@
 # patchctl
 
-For account registration, database onboarding, and a first reviewed change, start with the
-[customer getting-started guide](../../docs/customer-getting-started.md).
+For local PostgreSQL setup, see the [local CLI guide](../../docs/local-cli.md). The
+[customer getting-started guide](../../docs/customer-getting-started.md) separately documents the
+incomplete reviewed-patch migration and its explicit hosted compatibility path.
 
 From the repository root:
 
@@ -13,25 +14,59 @@ pnpm --filter patchctl build
 node apps/cli/dist/cli.js --help
 ```
 
-The strict TypeScript source is `src/cli.ts`; `tsc` emits the Node.js executable to `dist/cli.js`. Generated output is ignored by Git. Rebuild after source changes. The package declares the `patchctl` executable for package-manager linking; no global installation is required for the demo.
+The strict TypeScript source is `src/cli.ts`; `tsc` emits the Node.js executable to `dist/cli.js`.
+Generated output is ignored by Git. The package declares the `patchctl` executable for
+package-manager linking; no global installation is required.
 
-The CLI is a runnable application under `apps/cli`, separate from the Next.js review UI and HTTP API in `apps/app`. It depends on shared contracts, not server-side use cases or database adapters. Its package name remains `patchctl`, so `pnpm --filter patchctl test`, `typecheck`, and `build` still select it. The local `pnpm local:agent` helper invokes this entrypoint with the scoped demo credential.
+## Local-first source commands
 
-The CLI and browser review UI use the same typed `@corely/api-client/patchctl` methods and shared response validation. The portable client uses native `fetch` with no automatic retries, redirects blocked, a 30-second timeout, and injected token retrieval/transport. `@corely/auth-client` remains a browser integration for human login; the CLI supplies only its scoped agent key. See the [shared-client architecture](../../docs/patchctl-client.md).
-
-Set `PATCHCTL_URL` to the service origin and `PATCHCTL_TOKEN` to a scoped agent key. Do not pass secrets in command arguments or commit them. The CLI does not receive Postgres credentials and has no approve/apply command.
+Customer Postgres credentials belong to the local CLI runtime. `connect` tests the database from
+the user's machine, stores only a credential reference and non-secret source metadata in
+`~/.patchctl/config.json`, and stores the DSN in the operating-system credential backend. The CLI
+does not send that DSN to the PatchCTL HTTP service.
 
 ```text
+patchctl connect postgres --tenant my-project
 patchctl sources
-patchctl schema SOURCE_ID
-patchctl read SOURCE_ID --file query.json
-patchctl read SOURCE_ID --after LAST_RECORD_ID --limit 50
-patchctl validate --file proposal.json
-patchctl propose --file proposal.json
-patchctl status PATCH_ID
-patchctl history PATCH_ID
+patchctl init --resources public.articles --columns id,title
+patchctl schema my-project
+patchctl schema my-project articles
+patchctl resources
+patchctl list articles --limit 20
+patchctl get articles 123
 ```
 
-Use `--stdin` instead of `--file` to pipe JSON. `validate` checks local structural constraints without a token, API call, or database mutation. Submission performs authoritative live schema, value, permission, and version validation. Never treat local validation as approval.
+`PATCHCTL_DATABASE_URL` is an explicit process-only fallback for CI and disposable environments.
+It takes precedence over the keyring and is never copied into PatchCTL config. Do not place it in
+source control, command arguments, shell history, shared logs, or telemetry.
 
-All successful output is JSON on stdout; errors are JSON on stderr. Exit codes: 0 success, 2 invalid input/configuration, 3 authentication/authorization, 4 conflict, 5 network/server failure. Reads return a nextCursor; pass it as `--after` while preserving the same query filters. Proposal output includes the human review URL and affected-record count. Input is limited to 2 MB and proposals to 100 records. No request is automatically retried.
+All successful output is JSON on stdout and structured errors are JSON on stderr. Connection and
+credential failures use safe error messages and never include a password or complete DSN. This
+boundary means PatchCTL does not expose or upload the credential; it cannot prevent an unrelated,
+fully privileged process running as the same OS user from accessing machine-level secrets.
+
+## Hosted compatibility commands
+
+The portable `@corely/api-client/patchctl` remains credential-free and Postgres-free. The older
+server-connected implementation is retained only behind the explicit `server` namespace while the
+review/apply migration is incomplete:
+
+```text
+patchctl server sources
+patchctl server schema SOURCE_ID
+patchctl server read SOURCE_ID --file query.json
+patchctl server validate --file proposal.json
+patchctl server propose --file proposal.json
+patchctl server status PATCH_ID
+patchctl server history PATCH_ID
+```
+
+This compatibility server must separately enable `PATCHCTL_LEGACY_SERVER_CONTENT=1`; it owns its
+own configured DSN and does not receive the local CLI credential. Set `PATCHCTL_URL` and
+`PATCHCTL_TOKEN` only for these explicit hosted commands. The local demo helper exercises this
+compatibility path with `pnpm local:agent server ...`.
+
+Use `--stdin` instead of `--file` to pipe JSON. Compatibility validation checks local structural
+constraints without a token or mutation. Submission performs authoritative server-side checks and
+returns a human review URL. Neither local database access nor coding-agent autonomy grants content
+approval authority: agents propose, humans approve.

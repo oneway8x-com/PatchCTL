@@ -17,8 +17,14 @@ import {
   type PatchContentQueryInput,
   type PatchDecisionInput,
   type PatchApplyInput,
-  LocalPatchSchema, LocalPatchListSchema, LocalProposalSchema, LocalDecisionSchema, LocalResultSchema, LocalClientTokenSchema,
-  type LocalProposal, type LocalExecutionResult,
+  LocalPatchSchema,
+  LocalPatchListSchema,
+  LocalProposalSchema,
+  LocalDecisionSchema,
+  LocalResultSchema,
+  LocalClientTokenSchema,
+  type LocalProposal,
+  type LocalExecutionResult,
 } from "@corely/contracts";
 import { request, HttpError } from "./http/request.js";
 
@@ -73,6 +79,15 @@ function query(input: Record<string, string | number | undefined>): string {
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+const credentialShapedDetail =
+  /(?:postgres(?:ql)?:\/\/|\b(?:password|passwd|pwd|secret|token|authorization|bearer)\b)/i;
+function safeApiErrorMessage(details: unknown, status: number): string {
+  const fallback = `API returned HTTP ${status}.`;
+  if (!isRecord(details) || typeof details.detail !== "string") return fallback;
+  return credentialShapedDetail.test(details.detail)
+    ? fallback
+    : details.detail;
 }
 
 /** Portable, stateless client. Permissions and human approval are enforced by the server. */
@@ -163,9 +178,7 @@ export function createPatchctlClient(config: PatchctlClientConfig) {
           isRecord(details) && typeof details.code === "string"
             ? details.code
             : "API_ERROR",
-          isRecord(details) && typeof details.detail === "string"
-            ? details.detail
-            : `API returned HTTP ${error.status}.`,
+          safeApiErrorMessage(details, error.status),
           error.status,
         );
       }
@@ -187,12 +200,41 @@ export function createPatchctlClient(config: PatchctlClientConfig) {
   }
 
   return {
-    localSubmit: (input: LocalProposal) => call("/local-patches", LocalPatchSchema, "POST", parseInput(LocalProposalSchema, input)),
-    localPatch: (id: string) => call(`/local-patches/${segment(id)}`, LocalPatchSchema, "GET"),
-    localPatches: (after?: string, approved = false) => call(`/local-patches${query({ after, ...(approved ? { approved: "true" } : {}) })}`, LocalPatchListSchema, "GET"),
-    localDecide: (id: string, revision: string, decision: "APPROVED" | "REJECTED") => call(`/local-patches/${segment(id)}/decision`, LocalPatchSchema, "POST", parseInput(LocalDecisionSchema, { revision, decision })),
-    localResult: (id: string, result: LocalExecutionResult) => call(`/local-patches/${segment(id)}/execution-result`, LocalPatchSchema, "POST", parseInput(LocalResultSchema, result)),
-    createLocalToken: () => call("/local-client-token", LocalClientTokenSchema, "POST", {}),
+    localSubmit: (input: LocalProposal) =>
+      call(
+        "/local-patches",
+        LocalPatchSchema,
+        "POST",
+        parseInput(LocalProposalSchema, input),
+      ),
+    localPatch: (id: string) =>
+      call(`/local-patches/${segment(id)}`, LocalPatchSchema, "GET"),
+    localPatches: (after?: string, approved = false) =>
+      call(
+        `/local-patches${query({ after, ...(approved ? { approved: "true" } : {}) })}`,
+        LocalPatchListSchema,
+        "GET",
+      ),
+    localDecide: (
+      id: string,
+      revision: string,
+      decision: "APPROVED" | "REJECTED",
+    ) =>
+      call(
+        `/local-patches/${segment(id)}/decision`,
+        LocalPatchSchema,
+        "POST",
+        parseInput(LocalDecisionSchema, { revision, decision }),
+      ),
+    localResult: (id: string, result: LocalExecutionResult) =>
+      call(
+        `/local-patches/${segment(id)}/execution-result`,
+        LocalPatchSchema,
+        "POST",
+        parseInput(LocalResultSchema, result),
+      ),
+    createLocalToken: () =>
+      call("/local-client-token", LocalClientTokenSchema, "POST", {}),
     actor: (options?: CallOptions) =>
       call("/me", PatchActorSchema, "GET", undefined, options),
     sources: (options?: CallOptions) =>

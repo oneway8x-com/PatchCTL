@@ -54,12 +54,12 @@ In another local terminal, read the session without printing it:
 $demoSession=Get-Content -LiteralPath $env:PATCHCTL_DEMO_SESSION -Raw | ConvertFrom-Json
 $env:PATCHCTL_URL='http://127.0.0.1:3108'
 $env:PATCHCTL_TOKEN=$demoSession.agentToken
-node apps/cli/dist/cli.js schema $demoSession.sourceId
-'{"filters":[{"field":"summary_en","op":"missing"}]}' | node apps/cli/dist/cli.js read $demoSession.sourceId --stdin
+node apps/cli/dist/cli.js server schema $demoSession.sourceId
+'{"filters":[{"field":"summary_en","op":"missing"}]}' | node apps/cli/dist/cli.js server read $demoSession.sourceId --stdin
 ```
 
-Give the agent the prompt above and only the scoped agent environment, never `session.json` or the human credential. Ask it to read the source bodies, produce a proposal file with `mode: "fill-missing"`, the returned `schemaVersion`, and each record's `id`, `version`, and `changes.summary_en`. Then run `node apps/cli/dist/cli.js validate --file proposal.json` and `node apps/cli/dist/cli.js propose --file proposal.json`. Follow the returned review URL.
+Give the agent the prompt above and only the scoped agent environment, never `session.json` or the human credential. This fixture intentionally uses the explicit `server` compatibility namespace; it does not represent the default local-first source path. Ask the agent to read the source bodies, produce a proposal file with `mode: "fill-missing"`, the returned `schemaVersion`, and each record's `id`, `version`, and `changes.summary_en`. Then run `node apps/cli/dist/cli.js server validate --file proposal.json` and `node apps/cli/dist/cli.js server propose --file proposal.json`. Follow the returned review URL.
 
-For this isolated fixture only, a local human can place the session's `humanToken` in the browser's `accessToken` localStorage key at `http://127.0.0.1:3108`, then reload. The automated test performs that step without exposing credentials. Production uses normal sign-in; do not add a demo-login endpoint or share this credential with an agent. Inspect all ten changes and click **Approve and apply**. The CLI `status` and `history` commands show the result.
+For this isolated fixture only, a local human can place the session's `humanToken` in the browser's `accessToken` localStorage key at `http://127.0.0.1:3108`, then reload. The automated test performs that step without exposing credentials. Production uses normal sign-in; do not add a demo-login endpoint or share this credential with an agent. Inspect all ten changes and click **Approve and apply**. The compatibility CLI `server status` and `server history` commands show the result.
 
 Session files contain credentials and are ignored by Git. Keep their directory private (Windows uses inherited directory ACLs; Unix creation requests owner-only permissions). Delete the specific session directory after stopping its demo, and clear the browser's demo token.

@@ -4,7 +4,7 @@ Declare a field as an editable/readable `enum` with an explicit `values` allowli
 
 For existing many-to-one categories, declare `type: "relation"` and `relation: { namespace, table, key, label, tenantColumn }`. Registration requires a real, validated, single-column foreign key, a single-column target primary key, a text display label, and a Tenant column. Targets are always scoped by the authenticated Tenant, including dedicated source schemas. Nested creation and many-to-many rewrites are unsupported.
 
-`patchctl targets SOURCE_ID category_id` discovers permitted IDs and labels, with `--after ID` pagination. The equivalent read-only endpoint is `GET /api/patchctl/sources/:id/relations/:field?limit=50&after=ID`. Only explicitly readable relation fields can expose targets. IDs are represented as strings, including numeric foreign keys.
+The hosted compatibility command `patchctl server targets SOURCE_ID category_id` discovers permitted IDs and labels, with `--after ID` pagination. The equivalent read-only endpoint is `GET /api/patchctl/sources/:id/relations/:field?limit=50&after=ID`. Only explicitly readable relation fields can expose targets. IDs are represented as strings, including numeric foreign keys.
 
 Use the normal proposal contract with `changes: { placement: "EARN_TOP", category_id: "existing-id" }`. Explicit `null` is allowed only for nullable fields. Missing, foreign-Tenant or invalid targets are rejected without disclosing their labels. Bulk proposals retain the shared 100-record cap and require human review.
 

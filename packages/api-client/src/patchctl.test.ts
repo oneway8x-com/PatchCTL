@@ -99,6 +99,44 @@ describe("portable PatchCTL client", () => {
     expect(transport).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects hosted source responses that contain credential-shaped fields", async () => {
+    const sourceClient = createPatchctlClient({
+      ...config,
+      fetch: async () =>
+        json([
+          {
+            id: sourceId,
+            name: "Articles",
+            password: "must-not-cross-the-boundary",
+          },
+        ]),
+    });
+    await expect(sourceClient.sources()).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+
+    const schemaClient = createPatchctlClient({
+      ...config,
+      fetch: async () =>
+        json({
+          definition: {
+            namespace: "public",
+            table: "articles",
+            key: "id",
+            isolation: { mode: "row", tenantColumn: "tenant_id" },
+            fields: {},
+            schedules: [],
+          },
+          version: hash,
+          versionStrategy: "postgres-xmin-and-whole-row",
+          connectionString: "postgresql://must-not-cross-the-boundary",
+        }),
+    });
+    await expect(schemaClient.schema(sourceId)).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+
   it("returns typed proposals with a same-origin review link", async () => {
     const transport = vi.fn<typeof fetch>(async () =>
       json({
@@ -153,6 +191,31 @@ describe("portable PatchCTL client", () => {
       expect(transport).toHaveBeenCalledTimes(1);
     },
   );
+
+  it("redacts credential-shaped API error details", async () => {
+    const canary =
+      "postgresql://issue24-user:issue24-password@database.example/content";
+    const transport = vi.fn<typeof fetch>(async () =>
+      json(
+        {
+          code: "SOURCE_UNREACHABLE",
+          detail: `Database failure for ${canary}`,
+        },
+        503,
+      ),
+    );
+    const error = await createPatchctlClient({ ...config, fetch: transport })
+      .sources()
+      .catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(PatchctlClientError);
+    expect(String(error)).not.toContain(canary);
+    expect(String(error)).not.toContain("issue24-password");
+    expect(error).toMatchObject({
+      code: "SOURCE_UNREACHABLE",
+      status: 503,
+      message: "API returned HTTP 503.",
+    });
+  });
 
   it("redacts network failures and makes only one attempt", async () => {
     const transport = vi.fn<typeof fetch>(async () => {

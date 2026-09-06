@@ -4,7 +4,7 @@ import { z } from "zod";
 import { LocalProposalSchema, type LocalProposal } from "@corely/contracts";
 import { createPatchctlClient, PatchctlClientError } from "@corely/api-client/patchctl";
 import { discoverResources, selectedResources, requireResource, readSnapshot, validateRelation, withDatabase, LocalError } from "@patchctl/postgres";
-import { configDirectory, readConfig, writeConfig } from "./config.js";
+import { configDirectory, credentialReference, legacyCredentialReference, readConfig, writeConfig } from "./config.js";
 import { NativeCredentialStore, databaseCredential, type CredentialStore } from "./credentials.js";
 import { hiddenSecret } from "./commands.js";
 import { fingerprint, parseValue, readDraft, withDraftLock } from "./drafts.js";
@@ -16,8 +16,8 @@ export async function runServerCommand(args: string[], {
   try {
     const command = args[0];
     const rest = args.slice(1).filter((a) => a !== "--json");
-    if (command === "login" ? !(rest.length === 2 && rest[0] === "--server") : rest.length !== 0)
-      throw new LocalError("INVALID_INPUT", "Use login --server ORIGIN, submit, or sync.");
+    if (command === "login" ? !(rest.length === 2 && rest[0] === "--server") : command !== "submit" || rest.length !== 0)
+      throw new LocalError("INVALID_INPUT", "Use login --server ORIGIN or submit.");
     const directory = configDirectory(env), config = await readConfig(directory), tenantId = config.currentTenant;
     if (!tenantId || !config.tenants[tenantId]) throw new LocalError("CREDENTIAL_NOT_FOUND", "Run patchctl connect first.");
     const local = config.tenants[tenantId];
@@ -41,7 +41,7 @@ export async function runServerCommand(args: string[], {
     const client = createPatchctlClient({ baseUrl: server.url, getAccessToken: () => token });
     const actor = await client.actor();
     if (actor.tenantId !== server.tenantId || !actor.connectionIds?.includes(server.connectionId)) throw new LocalError("TENANT_MISMATCH", "Token does not match the configured Tenant and connection.");
-    const { secret, warnings } = await databaseCredential(tenantId, credentials, env);
+    const { secret, warnings } = await databaseCredential(credentialReference(tenantId, local), credentials, env, legacyCredentialReference(local));
     if (command !== "submit") throw new LocalError("INVALID_INPUT", "Unknown server command.");
     const patch = await withDraftLock(directory, tenantId, async (save) => {
       const draft = await readDraft(directory, tenantId);

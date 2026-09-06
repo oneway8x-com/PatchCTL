@@ -9,16 +9,32 @@ The example task is **add English summaries to articles that do not have one**.
 does not create a Tenant, assign membership, connect a database, or issue an agent key.
 There is no customer-facing Tenant/source/key setup wizard yet.
 
-The CLI connects to the **PatchCTL HTTP service**, not directly to Postgres:
+The default source commands connect **directly from the local CLI runtime to
+Postgres**. The OS credential backend owns the customer DSN; normal PatchCTL config
+contains only a credential reference and non-secret source metadata:
 
 ```text
-Your CLI / coding agent -> PatchCTL API -> proposed patch
-Your browser           -> human review -> approved apply -> your Postgres content
+Your CLI / coding agent -> local credential store -> your Postgres
+Your CLI / coding agent -> non-secret workflow data -> PatchCTL API
 ```
 
-An operator connects the database on the server. Your coding agent receives a scoped API key,
-never the database password or your human sign-in token. The CLI currently has no `login`,
-`connect`, `register`, `approve`, or `apply` command.
+Start local source discovery with `patchctl connect postgres`, `patchctl sources`,
+and `patchctl schema <local-source>`. The hosted service does not receive this DSN.
+See the [local CLI guide](local-cli.md) for the implemented local read/draft slice.
+
+The complete proposal/review/apply walkthrough below still describes the **legacy
+hosted compatibility path** while local submission and apply migration is incomplete:
+
+```text
+Your CLI / coding agent -> patchctl server ... -> PatchCTL API -> proposed patch
+Your browser             -> human review -> approved compatibility apply -> Postgres
+```
+
+Every hosted CLI invocation below therefore uses the explicit `server` namespace,
+and the operator must explicitly enable `PATCHCTL_LEGACY_SERVER_CONTENT=1`. This path
+uses a separately configured server credential; it never receives or resolves the
+credential stored by `patchctl connect postgres`. It is migration protection, not
+the default architecture.
 
 You need:
 
@@ -70,7 +86,7 @@ the Tenant. Refreshing the old session alone does not pick up a previously missi
 If you belong to multiple Tenants, ask the operator to verify the intended active Tenant;
 the current login flow selects a membership and has no customer Tenant-switching UI.
 
-## 3. Connect your content database — operator-assisted
+## 3. Compatibility-only hosted connection — operator-assisted
 
 Tell the operator which database/table you want to manage and which fields may be edited.
 For the example in this guide, request:
@@ -190,7 +206,7 @@ scheme/host/port, without `/api`, a path, query string, or embedded credentials.
 ```powershell
 $env:PATCHCTL_URL = 'https://your-patchctl-instance.example'
 $env:PATCHCTL_TOKEN = Read-Host 'Paste your scoped agent key' -MaskInput
-node $cli sources
+node $cli server sources
 if ($LASTEXITCODE -ne 0) { throw 'Resolve the CLI connection error before continuing.' }
 ```
 
@@ -211,8 +227,8 @@ Copy the correct ID from `sources`:
 
 ```powershell
 $sourceId = '<source-id-from-sources>'
-node $cli schema $sourceId
-node $cli read $sourceId --limit 10
+node $cli server schema $sourceId
+node $cli server read $sourceId --limit 10
 ```
 
 The schema lists readable/editable fields and locales. The read result includes each record's
@@ -233,7 +249,7 @@ New-Item -ItemType Directory -Path $jobDir -Force | Out-Null
 Set-Location $jobDir
 
 $query = '{"fields":["title","body","summary_en"],"filters":[{"field":"summary_en","op":"missing"}],"limit":10}'
-$resultJson = $query | node $cli read $sourceId --stdin
+$resultJson = $query | node $cli server read $sourceId --stdin
 if ($LASTEXITCODE -ne 0) { throw 'Read failed; do not prepare a patch from this output.' }
 $content = ($resultJson -join "`n") | ConvertFrom-Json
 $content | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath 'articles-to-review.json' -Encoding utf8
@@ -288,9 +304,9 @@ Start with one to ten records. The maximum is 100 records per patch and 2 MB inp
 Validate and submit:
 
 ```powershell
-node $cli validate --file proposal.json
+node $cli server validate --file proposal.json
 if ($LASTEXITCODE -ne 0) { throw 'Fix the proposal before submission.' }
-$proposalJson = node $cli propose --file proposal.json
+$proposalJson = node $cli server propose --file proposal.json
 if ($LASTEXITCODE -ne 0) { throw 'Inspect the error and current patch queue before retrying.' }
 $proposal = ($proposalJson -join "`n") | ConvertFrom-Json
 $proposal | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath 'submission.json' -Encoding utf8
@@ -325,9 +341,9 @@ Do not force an old proposal through; reread the data and prepare a new human-re
 In the same terminal:
 
 ```powershell
-node $cli status $patchId
-node $cli history $patchId
-node $cli read $sourceId --limit 10
+node $cli server status $patchId
+node $cli server history $patchId
+node $cli server read $sourceId --limit 10
 ```
 
 Expect `state: "applied"` after successful application. Inspect the patch's before/after values
@@ -341,7 +357,7 @@ Other supported tasks use the same read → propose → human review flow:
 - **Translate:** use distinct declared source/target locales and translation metadata; see
   [translations and missing content](patchctl-missing-content.md).
 - **Assign an enum/category:** use only permitted values or existing relation targets; see
-  [assignments](patchctl-assignments.md). `node $cli targets $sourceId <relation-field>` discovers
+  [assignments](patchctl-assignments.md). `node $cli server targets $sourceId <relation-field>` discovers
   allowed target IDs.
 - **Schedule:** only explicitly configured timestamp pairs; see [scheduling](patchctl-scheduling.md).
   PatchCTL does not run a background publication/activation engine.

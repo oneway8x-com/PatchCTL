@@ -18,35 +18,110 @@ const selectionSchema = z
     columns: z.array(z.string().min(1)).min(1),
   })
   .strict();
+const sourceMetadataSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().trim().min(1).max(100),
+    type: z.literal("postgres"),
+    credentialRef: z.string(),
+    legacyCredentialRef: z
+      .string()
+      .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\/database$/)
+      .optional(),
+  })
+  .strict()
+  .refine((source) => source.credentialRef === `patchctl/source/${source.id}`, {
+    path: ["credentialRef"],
+    message: "Credential reference must belong to its source ID.",
+  });
+const serverSchema = z
+  .object({
+    url: z.string().url(),
+    tenantId: z.string(),
+    connectionId: z.string().uuid(),
+  })
+  .strict();
+const tenantConfigFields = {
+  resources: z.array(selectionSchema),
+  databaseId: z.string().uuid().optional(),
+  server: serverSchema.optional(),
+};
+const tenantConfigSchema = z
+  .object({
+    source: sourceMetadataSchema,
+    ...tenantConfigFields,
+  })
+  .strict();
+const legacyTenantConfigSchema = z
+  .object({
+    source: sourceMetadataSchema.optional(),
+    ...tenantConfigFields,
+  })
+  .strict();
 export type Selection = z.infer<typeof selectionSchema>;
+export type SourceMetadata = z.infer<typeof sourceMetadataSchema>;
 export const configSchema = z
   .object({
     currentTenant: tenantIdSchema.optional(),
-    tenants: z.record(
-      tenantIdSchema,
-      z
-        .object({
-          resources: z.array(selectionSchema),
-          databaseId: z.string().uuid().optional(),
-          server: z.object({ url: z.string().url(), tenantId: z.string(), connectionId: z.string().uuid() }).strict().optional(),
-        })
-        .strict(),
-    ),
+    tenants: z.record(tenantIdSchema, tenantConfigSchema),
+  })
+  .strict();
+const legacyConfigSchema = z
+  .object({
+    currentTenant: tenantIdSchema.optional(),
+    tenants: z.record(tenantIdSchema, legacyTenantConfigSchema),
   })
   .strict();
 export type LocalConfig = z.infer<typeof configSchema>;
+
+export function sourceMetadata(
+  _tenantId: string,
+  local: LocalConfig["tenants"][string],
+): SourceMetadata {
+  return local.source;
+}
+
+export function credentialReference(
+  _tenantId: string,
+  local: LocalConfig["tenants"][string],
+): string {
+  return local.source.credentialRef;
+}
+
+export function legacyCredentialReference(
+  local: LocalConfig["tenants"][string],
+): string | undefined {
+  return local.source.legacyCredentialRef;
+}
 
 export function configDirectory(env: NodeJS.ProcessEnv): string {
   return env.PATCHCTL_HOME ?? join(homedir(), ".patchctl");
 }
 export async function readConfig(directory: string): Promise<LocalConfig> {
   try {
-    return configSchema.parse(
+    const stored = legacyConfigSchema.parse(
       JSON.parse(await readFile(join(directory, "config.json"), "utf8")),
     );
+    let migrated = false;
+    for (const [tenantId, local] of Object.entries(stored.tenants)) {
+      if (local.source) continue;
+      const sourceId = local.databaseId ?? randomUUID();
+      local.source = {
+        id: sourceId,
+        name: tenantId,
+        type: "postgres",
+        credentialRef: `patchctl/source/${sourceId}`,
+        legacyCredentialRef: `${tenantId}/database`,
+      };
+      migrated = true;
+    }
+    const config = configSchema.parse(stored);
+    if (migrated) await writeConfig(directory, config);
+    return config;
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT")
       return { tenants: {} };
+    if (error instanceof LocalError) throw error;
     throw new LocalError(
       "INVALID_CONFIG",
       "Local configuration is invalid or unreadable.",

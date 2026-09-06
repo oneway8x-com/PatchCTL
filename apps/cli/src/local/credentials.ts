@@ -51,9 +51,10 @@ export class NativeCredentialStore implements CredentialStore {
 }
 
 export async function databaseCredential(
-  tenantId: string,
+  credentialRef: string,
   store: CredentialStore,
   env: NodeJS.ProcessEnv,
+  legacyCredentialRef?: string,
 ): Promise<{ secret: string; warnings: string[] }> {
   if (env.PATCHCTL_DATABASE_URL) {
     return {
@@ -63,11 +64,21 @@ export async function databaseCredential(
       ],
     };
   }
-  const secret = await store.get(`${tenantId}/database`);
+  let secret = await store.get(credentialRef);
+  const warnings: string[] = [];
+  if (!secret && legacyCredentialRef) {
+    secret = await store.get(legacyCredentialRef);
+    if (secret) {
+      await store.set(credentialRef, secret);
+      warnings.push(
+        "Migrated the database credential to its source-specific OS keyring reference.",
+      );
+    }
+  }
   if (!secret)
     throw new LocalError(
       "CREDENTIAL_NOT_FOUND",
       "Run patchctl connect, or explicitly provide PATCHCTL_DATABASE_URL.",
     );
-  return { secret, warnings: [] };
+  return { secret, warnings };
 }
