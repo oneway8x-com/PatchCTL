@@ -57,7 +57,12 @@ export type CurrencyCode = string;
 export type Currency = CurrencyCode;
 
 export type Locale = "de-DE" | "en-US";
-export type ExpenseCategory = "Office" | "Meals" | "Travel" | "Software" | "Other";
+export type ExpenseCategory =
+  | "Office"
+  | "Meals"
+  | "Travel"
+  | "Software"
+  | "Other";
 export interface Receipt {
   id: string;
   merchant: string;
@@ -234,7 +239,9 @@ export const CreateInvoiceDraftInputSchema = z.object({
   actorUserId: z.string(),
   custom: CustomValuesSchema.optional(),
 });
-export type CreateInvoiceDraftInput = z.infer<typeof CreateInvoiceDraftInputSchema>;
+export type CreateInvoiceDraftInput = z.infer<
+  typeof CreateInvoiceDraftInputSchema
+>;
 
 export const CreateInvoiceDraftOutputSchema = z.object({
   id: z.string(),
@@ -245,7 +252,9 @@ export const CreateInvoiceDraftOutputSchema = z.object({
   lines: z.array(InvoiceLineInputSchema.extend({ id: z.string() })),
   custom: CustomValuesSchema.optional(),
 });
-export type CreateInvoiceDraftOutput = z.infer<typeof CreateInvoiceDraftOutputSchema>;
+export type CreateInvoiceDraftOutput = z.infer<
+  typeof CreateInvoiceDraftOutputSchema
+>;
 
 export const IssueInvoiceInputSchema = z.object({
   invoiceId: z.string(),
@@ -269,7 +278,9 @@ export const IdentityUserCreatedPayloadSchema = z.object({
   userId: z.string(),
   email: z.string(),
 });
-export type IdentityUserCreatedPayload = z.infer<typeof IdentityUserCreatedPayloadSchema>;
+export type IdentityUserCreatedPayload = z.infer<
+  typeof IdentityUserCreatedPayloadSchema
+>;
 
 export const ExpenseCreatedPayloadSchema = z.object({
   expenseId: z.string(),
@@ -289,7 +300,9 @@ export const PlatformEntityDeletedPayloadSchema = z.object({
   entityType: z.string().min(1),
   entityId: z.string().min(1),
 });
-export type PlatformEntityDeletedPayload = z.infer<typeof PlatformEntityDeletedPayloadSchema>;
+export type PlatformEntityDeletedPayload = z.infer<
+  typeof PlatformEntityDeletedPayloadSchema
+>;
 
 export const EVENT_NAMES = {
   IDENTITY_USER_CREATED: "identity.user.created",
@@ -304,3 +317,4 @@ export * from "./patches/patches.schema";
 export * from "./patches/content-schema";
 export * from "./patches/patchctl-api.schema";
 export * from "./patches/local-patches.schema";
+export * from "./patches/source-metadata.schema";

@@ -534,6 +534,9 @@ importers:
 
   packages/postgres:
     dependencies:
+      '@corely/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       pg:
         specifier: 'catalog:'
         version: 8.16.3

@@ -1,5 +1,12 @@
+import { createHash } from "node:crypto";
 import pg from "pg";
 import { z } from "zod";
+import {
+  SourceDiscoveredResourcesSchema,
+  SourceEffectiveSchemaSchema,
+  canonicalSourceResources,
+  type SourceEffectiveSchema,
+} from "@corely/contracts";
 import { LocalError } from "./errors.js";
 export type Selection = {
   schemaName: string;
@@ -229,6 +236,85 @@ export function selectedResources(
       ),
       constraints: resource.constraints.filter((constraint) =>
         constraint.columns.every((name) => selection.columns.includes(name)),
+      ),
+    };
+  });
+}
+
+export function normalizeDiscoveredResources(discovered: Resource[]) {
+  const candidate = discovered.map((resource) => ({
+    name: resource.name,
+    schemaName: resource.schemaName,
+    tableName: resource.tableName,
+    primaryKey: resource.primaryKey,
+    fields: resource.fields.map((field) => ({
+      name: field.name,
+      type: field.type,
+      nullable: field.nullable,
+      primaryKey: field.name === resource.primaryKey,
+      databaseReadonly: field.readonly,
+      ...(field.enumValues ? { enumValues: [...field.enumValues].sort() } : {}),
+      ...(field.relation ? { relation: field.relation } : {}),
+    })),
+  }));
+  const resources = SourceDiscoveredResourcesSchema.parse(
+    JSON.parse(canonicalSourceResources(candidate)),
+  );
+  return {
+    resources,
+    schemaVersion: createHash("sha256")
+      .update(canonicalSourceResources(resources))
+      .digest("hex"),
+  };
+}
+
+export function applyEffectiveSchema(
+  discovered: Resource[],
+  input: SourceEffectiveSchema,
+): Resource[] {
+  const effective = SourceEffectiveSchemaSchema.parse(input);
+  const normalized = normalizeDiscoveredResources(discovered);
+  if (normalized.schemaVersion !== effective.schemaVersion)
+    throw new LocalError(
+      "SCHEMA_CHANGED",
+      "The local database schema differs from the synchronized PatchCTL schema.",
+    );
+  return effective.resources.map((configured) => {
+    const resource = discovered.find((item) => item.name === configured.name);
+    if (!resource)
+      throw new LocalError(
+        "SCHEMA_CHANGED",
+        "A configured resource no longer exists in the local database.",
+      );
+    const fields = configured.fields.map((configuredField) => {
+      const field = resource.fields.find(
+        (item) => item.name === configuredField.name,
+      );
+      if (!field)
+        throw new LocalError(
+          "SCHEMA_CHANGED",
+          "A configured field no longer exists in the local database.",
+        );
+      return {
+        ...field,
+        type: configuredField.type,
+        nullable: configuredField.nullable,
+        readonly: field.readonly || !configuredField.writable,
+        ...(configuredField.enumValues
+          ? { enumValues: configuredField.enumValues }
+          : { enumValues: undefined }),
+        ...(configuredField.relation
+          ? { relation: configuredField.relation }
+          : { relation: undefined }),
+      };
+    });
+    const selected = new Set(fields.map((field) => field.name));
+    return {
+      ...resource,
+      primaryKey: configured.primaryKey,
+      fields,
+      constraints: resource.constraints.filter((constraint) =>
+        constraint.columns.every((column) => selected.has(column)),
       ),
     };
   });

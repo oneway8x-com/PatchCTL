@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { SourceSchemaSyncInput } from "@corely/contracts";
 import { createPatchctlClient, PatchctlClientError } from "./patchctl.js";
 import { request } from "./http/request.js";
 
@@ -135,6 +136,98 @@ describe("portable PatchCTL client", () => {
     await expect(schemaClient.schema(sourceId)).rejects.toMatchObject({
       code: "INVALID_RESPONSE",
     });
+  });
+
+  it("syncs only strict normalized metadata and rejects credential-shaped request or response fields", async () => {
+    const resources: SourceSchemaSyncInput["resources"] = [
+      {
+        name: "public.articles",
+        schemaName: "public",
+        tableName: "articles",
+        primaryKey: "id",
+        fields: [
+          {
+            name: "id",
+            type: "text",
+            nullable: false,
+            primaryKey: true,
+            databaseReadonly: true,
+          },
+          {
+            name: "title",
+            type: "text",
+            nullable: false,
+            primaryKey: false,
+            databaseReadonly: false,
+          },
+        ],
+      },
+    ];
+    const input: SourceSchemaSyncInput = {
+      name: "Articles",
+      schemaVersion: hash,
+      resources,
+    };
+    const source = {
+      id: sourceId,
+      name: "Articles",
+      schemaVersion: hash,
+      syncedAt: "2026-09-06T12:00:00.000Z",
+      configurationVersion: 0,
+      configurationUpdatedAt: null,
+      resources: resources.map((resource) => ({
+        ...resource,
+        managed: false,
+        fields: resource.fields.map((field) => ({
+          ...field,
+          writable: false,
+          effectiveType: field.type,
+        })),
+      })),
+    };
+    const transport = vi.fn<typeof fetch>(async () =>
+      json({ changed: true, source }),
+    );
+    const client = createPatchctlClient({ ...config, fetch: transport });
+    await expect(client.syncSourceMetadata(sourceId, input)).resolves.toEqual({
+      changed: true,
+      source,
+    });
+    expect(transport.mock.calls[0][0]).toBe(
+      `https://example.test/api/patchctl/sources/${sourceId}/metadata`,
+    );
+    expect(transport.mock.calls[0][1]?.method).toBe("PUT");
+    const body = String(transport.mock.calls[0][1]?.body);
+    expect(body).not.toMatch(/postgres(?:ql)?:\/\//i);
+    expect(body).not.toMatch(/password|credential|secret/i);
+
+    const unsafeInput = {
+      ...input,
+      connectionString: "postgresql://user:password@database.test/content",
+      password: "must-not-cross-the-boundary",
+    };
+    let unsafeFailure: unknown;
+    try {
+      client.syncSourceMetadata(sourceId, unsafeInput);
+    } catch (error) {
+      unsafeFailure = error;
+    }
+    expect(unsafeFailure).toMatchObject({ code: "INVALID_INPUT" });
+    expect(transport).toHaveBeenCalledTimes(1);
+
+    const unsafeResponse = createPatchctlClient({
+      ...config,
+      fetch: async () =>
+        json({
+          ...source,
+          connectionString: "postgresql://must-not-cross-the-boundary",
+        }),
+    });
+    await expect(unsafeResponse.sourceMetadata(sourceId)).rejects.toMatchObject(
+      {
+        code: "INVALID_RESPONSE",
+      },
+    );
   });
 
   it("returns typed proposals with a same-origin review link", async () => {

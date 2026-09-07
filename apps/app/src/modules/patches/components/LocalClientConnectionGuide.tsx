@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   Button,
@@ -46,6 +47,7 @@ export function LocalClientConnectionGuide({
 }) {
   const auth = useAuth();
   const [clientToken, setClientToken] = useState("");
+  const [sourceId, setSourceId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
@@ -72,7 +74,9 @@ export function LocalClientConnectionGuide({
     setError("");
     setCopyStatus("");
     try {
-      setClientToken((await patchClient.createLocalToken()).token);
+      const created = await patchClient.createLocalToken();
+      setClientToken(created.token);
+      setSourceId(created.connectionId);
     } catch {
       setError(
         "Could not create a client token. Owner or administrator access is required.",
@@ -119,8 +123,14 @@ export function LocalClientConnectionGuide({
             </p>
           </li>
           <li className="space-y-2">
-            <p>Select the tables and columns the CLI may read.</p>
-            <Command>{"pnpm patchctl init"}</Command>
+            <p>
+              Pair the CLI below. Login introspects PostgreSQL locally and syncs
+              only normalized schema metadata to this Tenant.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Tables and fields are not managed or writable until you explicitly
+              configure them in the web UI.
+            </p>
           </li>
           <li className="space-y-3">
             <p>
@@ -196,8 +206,16 @@ export function LocalClientConnectionGuide({
             <Command>{`pnpm patchctl login --server ${serverOrigin}`}</Command>
             <p className="text-sm text-muted-foreground">
               Paste the token at the hidden prompt. Never add it to the command,
-              URL, or source control.
+              URL, or source control. Successful login prints the source
+              configuration URL after schema sync.
             </p>
+            {sourceId ? (
+              <Button asChild variant="outline">
+                <Link href={`/sources/${encodeURIComponent(sourceId)}`}>
+                  Configure paired source
+                </Link>
+              </Button>
+            ) : null}
           </li>
           <li className="space-y-2">
             <p>

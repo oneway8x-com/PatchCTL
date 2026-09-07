@@ -30,3 +30,4 @@ export * from "./assignment.postgres";
 export * from "./use-cases/read-relation-targets";
 export * from "./local-patches";
 export * from "./local-patches.repository";
+export * from "./local-source";

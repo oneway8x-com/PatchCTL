@@ -6,12 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { z } from "zod";
-const sessionSchema = z.object({
-  humanToken: z.string(),
-  agentToken: z.string(),
-  sourceId: z.string(),
-  tenantId: z.string(),
-});
+const sessionSchema = z.object({ humanToken: z.string() });
 test("local CLI submits an immutable patch and human review never writes the content database", async ({
   page,
   request,
@@ -29,6 +24,7 @@ test("local CLI submits an immutable patch and human review never writes the con
   const home = await mkdtemp(join(tmpdir(), "patchctl-e2e-"));
   const namespace = `local_${crypto.randomUUID().replaceAll("-", "")}`;
   const pool = new Pool({ connectionString: url });
+  let clientToken = "";
   async function cli(args: string[], success = true): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const child = spawn(
@@ -47,7 +43,7 @@ test("local CLI submits an immutable patch and human review never writes the con
             TZ: process.env.TZ,
             PATCHCTL_HOME: home,
             PATCHCTL_DATABASE_URL: url,
-            PATCHCTL_TOKEN: session.agentToken,
+            PATCHCTL_TOKEN: clientToken,
           },
         },
       );
@@ -71,6 +67,18 @@ test("local CLI submits an immutable patch and human review never writes the con
     });
   }
   try {
+    const tokenResponse = await request.post(
+      "/api/patchctl/local-client-token",
+      {
+        headers: { Authorization: `Bearer ${session.humanToken}` },
+        data: {},
+      },
+    );
+    expect(tokenResponse.status()).toBe(200);
+    const localClient = z
+      .object({ token: z.string(), connectionId: z.string().uuid() })
+      .parse(await tokenResponse.json());
+    clientToken = localClient.token;
     await pool.query(`CREATE SCHEMA "${namespace}"`);
     await pool.query(
       `CREATE TABLE "${namespace}".articles (id integer PRIMARY KEY, title text NOT NULL, score integer CHECK(score>=0), private_note text)`,
@@ -86,7 +94,36 @@ test("local CLI submits an immutable patch and human review never writes the con
       "--columns",
       "id,title,score",
     ]);
-    await cli(["login", "--server", "http://127.0.0.1:3110"]);
+    const connected = z
+      .object({
+        sourceId: z.string().uuid(),
+        schemaVersion: z.string(),
+        configurationUrl: z.string().url(),
+      })
+      .parse(await cli(["login", "--server", "http://127.0.0.1:3110"]));
+    expect(connected.sourceId).toBe(localClient.connectionId);
+    const configuration = await request.put(
+      `/api/patchctl/sources/${connected.sourceId}/configuration`,
+      {
+        headers: { Authorization: `Bearer ${session.humanToken}` },
+        data: {
+          expectedVersion: 0,
+          resources: [
+            {
+              name: `${namespace}.articles`,
+              managed: true,
+              fields: [
+                { name: "id", writable: false },
+                { name: "title", writable: true },
+                { name: "score", writable: true },
+              ],
+            },
+          ],
+        },
+      },
+    );
+    expect(configuration.status()).toBe(200);
+    expect(await configuration.text()).not.toContain(url);
     await cli(["patch", "start", "--title", "Improve article title"]);
     await cli([
       "update",
@@ -109,7 +146,7 @@ test("local CLI submits an immutable patch and human review never writes the con
     });
     const submitted = await request.get(
       `/api/patchctl/local-patches/${proposal.patchId}`,
-      { headers: { Authorization: `Bearer ${session.agentToken}` } },
+      { headers: { Authorization: `Bearer ${clientToken}` } },
     );
     const body = await submitted.text();
     expect(body).not.toContain("never uploaded");
@@ -117,7 +154,7 @@ test("local CLI submits an immutable patch and human review never writes the con
     const denied = await request.post(
       `/api/patchctl/local-patches/${proposal.patchId}/decision`,
       {
-        headers: { Authorization: `Bearer ${session.agentToken}` },
+        headers: { Authorization: `Bearer ${clientToken}` },
         data: { revision: proposal.revision, decision: "APPROVED" },
       },
     );

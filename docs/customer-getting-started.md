@@ -238,10 +238,13 @@ node $cli schema my-project articles
 node $cli list articles --limit 10
 ```
 
-`init` is required because PatchCTL selects no resources or columns by default. Include the
-single-column primary key and every field needed for review. Reconnecting clears this selection,
-because the new credential may point to a different database. Only selected values are returned,
-although the conflict hash covers the full row.
+`init` creates an optional additional local read restriction. After pairing, the CLI also syncs
+normalized, credential-free schema metadata and consumes the resources and writable fields that a
+human enables in the web UI. Include the single-column primary key and every field needed for
+review when using `init`. Reconnecting successfully clears this local selection because the new
+credential may point to a different database; a failed reconnect preserves the previous credential,
+configuration, database identity, and draft association. Only allowed values are returned, although
+the conflict hash covers the full row.
 
 Create one local draft and add the intended changes. Set `$articleId` and replace the sample
 summary with values reviewed against the record returned by `list` or `get`:
@@ -284,9 +287,12 @@ that token in the OS credential backend unless `PATCHCTL_TOKEN` was explicitly s
 process-only override. Normal config stores only the server origin, Tenant ID, connection ID, and
 credential references.
 
-Submission revalidates the current local schema and record snapshots, freezes the proposal, and
-sends its selected before/after values plus schema metadata to the review service. It never sends
-the Postgres DSN or local-client token. After submission, the local draft is immutable.
+Submission revalidates the current local schema and record snapshots, syncs normalized schema
+metadata without credentials, and freezes a proposal bound to the server's schema and configuration
+versions. The server rejects stale retries, unmanaged resources, and fields that are no longer
+writable. The proposal sends selected before/after values plus schema metadata to the review
+service, but never sends the Postgres DSN or local-client token. After submission, the local draft
+is immutable.
 
 A human with `review` permission opens the returned URL, checks every before/after value and the
 exact revision, and chooses **Approve** or **Reject**. Approval currently stops there: no local

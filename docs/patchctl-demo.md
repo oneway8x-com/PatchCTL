@@ -68,9 +68,10 @@ pnpm --filter @corely/e2e exec playwright test --config playwright.patchctl-loca
 ```
 
 This suite creates no self-service Tenant activation path and does not send the content database URL
-to the server. It rewrites only the isolated OTP fixture row instead of depending on external email,
-then removes the account, Tenant, token, patch metadata, content schema, and temporary CLI state. It
-also proves that approval leaves the source row unchanged because local apply/sync is not implemented.
+to the server. It syncs only normalized schema metadata, lets the human configure managed resources
+and writable fields, and rewrites only the isolated OTP fixture row instead of depending on external
+email. It then removes the account, Tenant, token, patch metadata, content schema, and temporary CLI
+state. Approval leaves content rows unchanged because local content apply is not implemented.
 
 ## Manual live-agent walkthrough
 

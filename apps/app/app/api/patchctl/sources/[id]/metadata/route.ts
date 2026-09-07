@@ -1,41 +1,40 @@
 import {
-  listLocalPatches,
-  submitLocalPatch,
+  getLocalSourceSchema,
   readPatchJson,
+  syncLocalSourceSchema,
 } from "@corely/modules-patches";
 import { getPatchActor } from "@/server/patch-runtime";
 import { localPatchRepository } from "@/server/local-patch-runtime";
 import { patchProblem } from "@/server/patch-response";
 
 export const runtime = "nodejs";
+type Context = { params: Promise<{ id: string }> };
 
-export async function GET(request: Request) {
+export async function GET(request: Request, context: Context) {
   try {
-    const query = new URL(request.url).searchParams;
     return Response.json(
-      await listLocalPatches(
+      await getLocalSourceSchema(
         await getPatchActor(request),
         localPatchRepository(),
-        query.get("after") ?? undefined,
-        query.get("approved") === "true",
+        (await context.params).id,
       ),
+      { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     return patchProblem(error);
   }
 }
 
-export async function POST(request: Request) {
+export async function PUT(request: Request, context: Context) {
   try {
-    const repository = localPatchRepository();
     return Response.json(
-      await submitLocalPatch(
+      await syncLocalSourceSchema(
         await readPatchJson(request),
         await getPatchActor(request),
-        repository,
-        repository,
+        localPatchRepository(),
+        (await context.params).id,
       ),
-      { status: 201 },
+      { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     return patchProblem(error);

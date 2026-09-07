@@ -6,7 +6,13 @@ import { join } from "node:path";
 import pg from "pg";
 import { runLocal } from "./dist/local/commands.js";
 import { runPatchCommand } from "./dist/local/patch-commands.js";
-import { inferField, quoteIdentifier, withDatabase } from "@patchctl/postgres";
+import {
+  applyEffectiveSchema,
+  inferField,
+  normalizeDiscoveredResources,
+  quoteIdentifier,
+  withDatabase,
+} from "@patchctl/postgres";
 import { readConfig, writeConfig } from "./dist/local/config.js";
 import {
   databaseCredential,
@@ -60,6 +66,180 @@ test("PostgreSQL field mapping keeps unsupported/generated/primary fields readon
   assert.equal(
     quoteIdentifier('a"; DROP TABLE articles;--'),
     '"a""; DROP TABLE articles;--"',
+  );
+});
+
+test("normalized schema fingerprints ignore resource, field, and enum ordering but change with semantics", () => {
+  const article = {
+    name: "public.articles",
+    schemaName: "public",
+    tableName: "articles",
+    primaryKey: "id",
+    fields: [
+      {
+        name: "status",
+        type: "enum",
+        nullable: false,
+        readonly: false,
+        pgType: "article_status",
+        enumValues: ["published", "draft"],
+      },
+      {
+        name: "id",
+        type: "number",
+        nullable: false,
+        readonly: true,
+        pgType: "int4",
+      },
+    ],
+    constraints: [
+      {
+        name: "articles_pkey",
+        kind: "p",
+        definition: "PRIMARY KEY (id)",
+        columns: ["id"],
+      },
+    ],
+  };
+  const category = {
+    name: "public.categories",
+    schemaName: "public",
+    tableName: "categories",
+    primaryKey: "id",
+    fields: [
+      {
+        name: "id",
+        type: "number",
+        nullable: false,
+        readonly: true,
+        pgType: "int4",
+      },
+    ],
+    constraints: [],
+  };
+  const first = normalizeDiscoveredResources([article, category]);
+  const reordered = normalizeDiscoveredResources([
+    category,
+    {
+      ...article,
+      fields: [
+        article.fields[1],
+        { ...article.fields[0], enumValues: ["draft", "published"] },
+      ],
+    },
+  ]);
+  assert.deepEqual(first.resources, reordered.resources);
+  assert.equal(first.schemaVersion, reordered.schemaVersion);
+
+  const changed = normalizeDiscoveredResources([
+    category,
+    {
+      ...article,
+      fields: article.fields.map((field) =>
+        field.name === "status" ? { ...field, nullable: true } : field,
+      ),
+    },
+  ]);
+  assert.notEqual(first.schemaVersion, changed.schemaVersion);
+
+  const effective = applyEffectiveSchema([article, category], {
+    sourceId: "11111111-1111-4111-8111-111111111111",
+    schemaVersion: first.schemaVersion,
+    configurationVersion: 1,
+    resources: [
+      {
+        name: "public.articles",
+        schemaName: "public",
+        tableName: "articles",
+        primaryKey: "id",
+        fields: [
+          {
+            name: "id",
+            type: "number",
+            nullable: false,
+            primaryKey: true,
+            writable: false,
+          },
+          {
+            name: "status",
+            type: "enum",
+            nullable: false,
+            primaryKey: false,
+            writable: true,
+            enumValues: ["draft", "published"],
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(effective.length, 1);
+  assert.equal(
+    effective[0].fields.find((field) => field.name === "id").readonly,
+    true,
+  );
+  assert.equal(
+    effective[0].fields.find((field) => field.name === "status").readonly,
+    false,
+  );
+});
+
+test("normalized metadata preserves exact PostgreSQL names and uses code-unit ordering", () => {
+  const longSchema = "s".repeat(63);
+  const longTable = "t".repeat(63);
+  const exact = {
+    name: `${longSchema}.${longTable}`,
+    schemaName: longSchema,
+    tableName: longTable,
+    primaryKey: " id ",
+    fields: [
+      {
+        name: " status ",
+        type: "enum",
+        nullable: false,
+        readonly: false,
+        pgType: " exact_enum ",
+        enumValues: [" ä ", "", "z"],
+      },
+      {
+        name: " id ",
+        type: "number",
+        nullable: false,
+        readonly: true,
+        pgType: "int4",
+      },
+    ],
+    constraints: [],
+  };
+  const nonAscii = {
+    ...exact,
+    name: "public.ä",
+    schemaName: "public",
+    tableName: "ä",
+  };
+  const ascii = {
+    ...exact,
+    name: "public.z",
+    schemaName: "public",
+    tableName: "z",
+  };
+  const first = normalizeDiscoveredResources([nonAscii, exact, ascii]);
+  const reordered = normalizeDiscoveredResources([ascii, exact, nonAscii]);
+
+  assert.deepEqual(first, reordered);
+  assert.deepEqual(
+    first.resources.map((resource) => resource.name),
+    ["public.z", "public.ä", exact.name],
+  );
+  const normalizedExact = first.resources.find(
+    (resource) => resource.name === exact.name,
+  );
+  assert.ok(normalizedExact);
+  assert.equal(normalizedExact.name.length > 120, true);
+  assert.equal(normalizedExact.primaryKey, " id ");
+  assert.deepEqual(
+    normalizedExact.fields.find((field) => field.name === " status ")
+      .enumValues,
+    ["", " ä ", "z"],
   );
 });
 
@@ -305,7 +485,7 @@ test(
         values.delete(k);
       },
     };
-    const invoke = async (args) => {
+    const invoke = async (args, overrides = {}) => {
       let output = "",
         errors = "";
       const execute = ["patch", "update", "diff", "validate"].includes(args[0])
@@ -314,7 +494,8 @@ test(
       const code = await execute(args, {
         env: { PATCHCTL_HOME: directory },
         credentials,
-        promptSecret: async () => databaseUrl,
+        promptSecret: overrides.promptSecret ?? (async () => databaseUrl),
+        ...(overrides.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {}),
         stdout: {
           write: (value) => {
             output += value;
@@ -532,6 +713,46 @@ test(
       assert.equal(
         (await invoke(["get", "articles", "1", "--json"])).error.code,
         "SCHEMA_CHANGED",
+      );
+
+      const paired = await readConfig(directory);
+      paired.tenants.demo.server = {
+        url: "https://patchctl.example",
+        tenantId: "hosted-tenant",
+        connectionId: "11111111-1111-4111-8111-111111111111",
+      };
+      await writeConfig(directory, paired);
+      values.set("demo/server-token", "scoped-test-token");
+      const configBeforeReconnect = await readFile(
+        join(directory, "config.json"),
+        "utf8",
+      );
+      const credentialBeforeReconnect = values.get(source.credentialRef);
+      const failedReconnect = await invoke(
+        ["connect", "postgres", "--tenant", "demo", "--json"],
+        {
+          fetchImpl: async () =>
+            new Response(
+              JSON.stringify({
+                code: "SYNC_UNAVAILABLE",
+                detail: "Synthetic metadata sync failure.",
+              }),
+              {
+                status: 503,
+                headers: { "Content-Type": "application/json" },
+              },
+            ),
+        },
+      );
+      assert.equal(failedReconnect.code, 1);
+      assert.equal(
+        await readFile(join(directory, "config.json"), "utf8"),
+        configBeforeReconnect,
+      );
+      assert.equal(values.get(source.credentialRef), credentialBeforeReconnect);
+      assert.equal(
+        (await readConfig(directory)).tenants.demo.databaseId,
+        paired.tenants.demo.databaseId,
       );
     } finally {
       await client.query(`DROP SCHEMA ${q} CASCADE`);

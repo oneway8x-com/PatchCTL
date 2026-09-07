@@ -15,6 +15,7 @@ import {
   writeConfig,
 } from "./config.js";
 import { LocalError } from "./errors.js";
+import { syncAndResolveResources } from "./source-sync.js";
 import {
   discoverResources,
   privilegeWarnings,
@@ -144,12 +145,14 @@ export async function runLocal(
     stderr = process.stderr,
     credentials = new NativeCredentialStore(),
     promptSecret = hiddenSecret,
+    fetchImpl,
   }: {
     env?: NodeJS.ProcessEnv;
     stdout?: { write(value: string): unknown };
     stderr?: { write(value: string): unknown };
     credentials?: CredentialStore;
     promptSecret?: () => Promise<string>;
+    fetchImpl?: typeof fetch;
   } = {},
 ): Promise<number> {
   try {
@@ -176,7 +179,7 @@ export async function runLocal(
             "validate --json",
           ],
           status:
-            "Local drafts, validation, and non-secret proposal submission are available. Local apply/sync is not implemented yet. Hosted server-owned-DSN commands require the explicit server namespace.",
+            "Local drafts, validation, normalized schema metadata sync, web-managed resource configuration, and non-secret proposal submission are available. Local content apply is not implemented yet. Hosted server-owned-DSN commands require the explicit server namespace.",
         }) + "\n",
       );
       return 0;
@@ -226,7 +229,11 @@ export async function runLocal(
     if (command === "connect") {
       const fromEnvironment = Boolean(env.PATCHCTL_DATABASE_URL);
       const secret = env.PATCHCTL_DATABASE_URL ?? (await promptSecret());
-      const warnings = await withDatabase(secret, privilegeWarnings);
+      const inspection = await withDatabase(secret, async (client) => ({
+        warnings: await privilegeWarnings(client),
+        discovered: await discoverResources(client),
+      }));
+      const warnings = inspection.warnings;
       const existing = config.tenants[tenantId];
       const sourceId = existing
         ? sourceMetadata(tenantId, existing).id
@@ -241,21 +248,67 @@ export async function runLocal(
         warnings.push(
           "Using PATCHCTL_DATABASE_URL only for this process; no credential was persisted. Prefer the OS keyring.",
         );
-      else await credentials.set(source.credentialRef, secret);
-      config.currentTenant = tenantId;
-      // A new connection may point at an entirely different database. Require
-      // explicit selection again rather than reusing the previous allowlist.
-      config.tenants[tenantId] = {
+      const nextLocal = {
         source,
         resources: [],
         databaseId: randomUUID(),
         ...(existing?.server ? { server: existing.server } : {}),
       };
-      await writeConfig(directory, config);
+      let synchronization: Awaited<
+        ReturnType<typeof syncAndResolveResources>
+      > | null = null;
+      if (nextLocal.server) {
+        const token =
+          env.PATCHCTL_TOKEN ??
+          (await credentials.get(`${tenantId}/server-token`));
+        if (token)
+          synchronization = await syncAndResolveResources(
+            tenantId,
+            nextLocal,
+            inspection.discovered,
+            credentials,
+            env,
+            fetchImpl,
+          );
+        else
+          throw new LocalError(
+            "CREDENTIAL_NOT_FOUND",
+            "The paired server token is unavailable. Run patchctl login again before reconnecting this source.",
+          );
+      }
+      const previousCredential = fromEnvironment
+        ? null
+        : await credentials.get(source.credentialRef);
+      if (!fromEnvironment) await credentials.set(source.credentialRef, secret);
+      config.currentTenant = tenantId;
+      // Reconnecting may target a different database. Server-managed configuration
+      // is applied only after the fresh normalized schema is synchronized.
+      config.tenants[tenantId] = nextLocal;
+      try {
+        await writeConfig(directory, config);
+      } catch (error) {
+        if (!fromEnvironment) {
+          try {
+            if (previousCredential)
+              await credentials.set(source.credentialRef, previousCredential);
+            else await credentials.delete(source.credentialRef);
+          } catch {
+            throw new LocalError(
+              "CREDENTIAL_ROLLBACK_FAILED",
+              "Local configuration was not changed, but the previous OS credential could not be restored. Reconnect before using this source.",
+            );
+          }
+        }
+        throw error;
+      }
       stdout.write(
         JSON.stringify({
           ok: true,
           source: { id: source.id, name: source.name, type: source.type },
+          discoveredResources: inspection.discovered.length,
+          schemaSynced: synchronization !== null,
+          schemaVersion: synchronization?.schemaVersion ?? null,
+          configurationUrl: synchronization?.configurationUrl ?? null,
           credentialStorage: fromEnvironment ? "environment" : "os-keyring",
           warnings,
         }) + "\n",
@@ -359,22 +412,49 @@ export async function runLocal(
         await writeConfig(directory, config);
         return { resources: selectedResources(discovered, selections) };
       }
-      const resources = selectedResources(discovered, local.resources);
+      const effective = await syncAndResolveResources(
+        tenantId,
+        local,
+        discovered,
+        credentials,
+        env,
+        fetchImpl,
+      );
+      const resources = effective.resources;
       if (command === "resources")
-        return { resources: resources.map((r) => ({ name: r.name })) };
+        return {
+          resources: resources.map((r) => ({ name: r.name })),
+          schemaVersion: effective.schemaVersion,
+          configurationVersion: effective.configurationVersion,
+          schemaSynced: effective.synced,
+        };
       if (command === "schema" && !resourceName) {
         const source = sourceMetadata(tenantId, local);
         return {
-          ...(source
-            ? {
-                source: { id: source.id, name: source.name, type: source.type },
-              }
-            : {}),
+          source: {
+            id: source.id,
+            name: source.name,
+            type: source.type,
+            ...(local.server
+              ? { serverSourceId: local.server.connectionId }
+              : {}),
+          },
+          schemaVersion: effective.schemaVersion,
+          configurationVersion: effective.configurationVersion,
+          configurationUrl: effective.configurationUrl,
+          schemaSynced: effective.synced,
           resources,
         };
       }
       const resource = requireResource(resources, resourceName);
-      if (command === "schema") return { resource };
+      if (command === "schema")
+        return {
+          resource,
+          schemaVersion: effective.schemaVersion,
+          configurationVersion: effective.configurationVersion,
+          configurationUrl: effective.configurationUrl,
+          schemaSynced: effective.synced,
+        };
       if (command === "get" || command === "list") {
         const records = await readRecords(
           client,

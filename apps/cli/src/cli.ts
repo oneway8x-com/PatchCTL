@@ -144,7 +144,7 @@ export async function run(
 ): Promise<number> {
   try {
     if (!args.includes("--help") && ["login", "submit"].includes(args[0]))
-      return runServerCommand(args, { env, stdout, stderr });
+      return runServerCommand(args, { env, stdout, stderr, fetchImpl });
     if (
       !args.includes("--help") &&
       (["patch", "update", "diff"].includes(args[0]) ||
@@ -152,9 +152,9 @@ export async function run(
           !args.includes("--file") &&
           !args.includes("--stdin")))
     )
-      return runPatchCommand(args, { env, stdout, stderr });
+      return runPatchCommand(args, { env, stdout, stderr, fetchImpl });
     if (!args.includes("--help") && localCommands.includes(args[0]))
-      return runLocal(args, { env, stdout, stderr });
+      return runLocal(args, { env, stdout, stderr, fetchImpl });
     const isServerCompatibility = args[0] === "server";
     const { positionals, options } = parse(
       isServerCompatibility ? args.slice(1) : args,

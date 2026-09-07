@@ -23,8 +23,15 @@ import {
   LocalDecisionSchema,
   LocalResultSchema,
   LocalClientTokenSchema,
+  SourceSchemaStateSchema,
+  SourceSchemaSyncInputSchema,
+  SourceSchemaSyncResultSchema,
+  SourceConfigurationInputSchema,
+  SourceEffectiveSchemaSchema,
   type LocalProposal,
   type LocalExecutionResult,
+  type SourceSchemaSyncInput,
+  type SourceConfigurationInput,
 } from "@corely/contracts";
 import { request, HttpError } from "./http/request.js";
 
@@ -239,6 +246,54 @@ export function createPatchctlClient(config: PatchctlClientConfig) {
       call("/me", PatchActorSchema, "GET", undefined, options),
     sources: (options?: CallOptions) =>
       call("/sources", PatchSourcesSchema, "GET", undefined, options),
+    localSources: (options?: CallOptions) =>
+      call(
+        "/sources?local=true",
+        PatchSourcesSchema,
+        "GET",
+        undefined,
+        options,
+      ),
+    sourceMetadata: (sourceId: string, options?: CallOptions) =>
+      call(
+        `/sources/${segment(sourceId)}/metadata`,
+        SourceSchemaStateSchema,
+        "GET",
+        undefined,
+        options,
+      ),
+    syncSourceMetadata: (
+      sourceId: string,
+      input: SourceSchemaSyncInput,
+      options?: CallOptions,
+    ) =>
+      call(
+        `/sources/${segment(sourceId)}/metadata`,
+        SourceSchemaSyncResultSchema,
+        "PUT",
+        parseInput(SourceSchemaSyncInputSchema, input),
+        options,
+      ),
+    configureSourceMetadata: (
+      sourceId: string,
+      input: SourceConfigurationInput,
+      options?: CallOptions,
+    ) =>
+      call(
+        `/sources/${segment(sourceId)}/configuration`,
+        SourceSchemaStateSchema,
+        "PUT",
+        parseInput(SourceConfigurationInputSchema, input),
+        options,
+      ),
+    effectiveSourceSchema: (sourceId: string, options?: CallOptions) =>
+      call(
+        `/sources/${segment(sourceId)}/effective-schema`,
+        SourceEffectiveSchemaSchema,
+        "GET",
+        undefined,
+        options,
+      ),
     schema: (sourceId: string, options?: CallOptions) =>
       call(
         `/sources/${segment(sourceId)}/schema`,

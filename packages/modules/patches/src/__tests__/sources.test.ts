@@ -5,6 +5,11 @@ import {
   listSources,
   requireSource,
 } from "../use-cases/sources";
+import {
+  emptyLocalSourceDocument,
+  listPatchctlSources,
+  type LocalSourceRepository,
+} from "../local-source";
 import type { Actor } from "../access";
 const actor: Actor = {
   id: "u",
@@ -78,5 +83,49 @@ describe("content source boundary", () => {
     await expect(
       configureSource({}, agent, repository, secrets, { test: vi.fn() }),
     ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("merges hosted and local sources without losing scope or duplicates", async () => {
+    const localSource = {
+      id: "local-source",
+      tenantId: "t",
+      name: "Local database",
+      document: emptyLocalSourceDocument(),
+    };
+    const localRepository: LocalSourceRepository = {
+      provisionLocalSourceToken: vi.fn(),
+      findLocalSource: vi.fn(),
+      listLocalSources: vi.fn(async (_tenantId, ids) =>
+        ids === null || ids.includes(localSource.id) ? [localSource] : [],
+      ),
+      replaceLocalSource: vi.fn(),
+    };
+    const hostedRepository = {
+      save: vi.fn(),
+      find: vi.fn(),
+      list: vi
+        .fn()
+        .mockResolvedValue([
+          source,
+          { ...source, id: localSource.id, name: "Legacy duplicate" },
+        ]),
+    };
+
+    await expect(
+      listPatchctlSources(actor, localRepository, hostedRepository),
+    ).resolves.toEqual([
+      { id: "existing", name: "Articles" },
+      { id: "local-source", name: "Local database" },
+    ]);
+    await expect(
+      listPatchctlSources(
+        { ...actor, kind: "agent", connectionIds: [localSource.id] },
+        localRepository,
+        hostedRepository,
+      ),
+    ).resolves.toEqual([{ id: "local-source", name: "Local database" }]);
+    await expect(listPatchctlSources(actor, localRepository)).resolves.toEqual([
+      { id: "local-source", name: "Local database" },
+    ]);
   });
 });

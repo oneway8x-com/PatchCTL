@@ -3,7 +3,6 @@ import {
   discoverResources,
   readSnapshot,
   requireResource,
-  selectedResources,
   validateRelation,
   withDatabase,
 } from "@patchctl/postgres";
@@ -18,6 +17,7 @@ import {
   databaseCredential,
   type CredentialStore,
 } from "./credentials.js";
+import { syncAndResolveResources } from "./source-sync.js";
 import {
   diffDraft,
   fingerprint,
@@ -35,11 +35,13 @@ export async function runPatchCommand(
     stdout = process.stdout,
     stderr = process.stderr,
     credentials = new NativeCredentialStore(),
+    fetchImpl,
   }: {
     env?: NodeJS.ProcessEnv;
     stdout?: { write(value: string): unknown };
     stderr?: { write(value: string): unknown };
     credentials?: CredentialStore;
+    fetchImpl?: typeof fetch;
   } = {},
 ): Promise<number> {
   try {
@@ -127,10 +129,16 @@ export async function runPatchCommand(
         legacyCredentialReference(local),
       );
       return withDatabase(secret, async (client) => {
-        const resources = selectedResources(
-          await discoverResources(client),
-          config.tenants[tenantId].resources,
+        const discovered = await discoverResources(client);
+        const effective = await syncAndResolveResources(
+          tenantId,
+          local,
+          discovered,
+          credentials,
+          env,
+          fetchImpl,
         );
+        const resources = effective.resources;
         if (command === "update") {
           const resource = requireResource(resources, resourceName);
           const changes = Object.fromEntries(

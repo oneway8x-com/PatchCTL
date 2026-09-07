@@ -25,6 +25,11 @@ const loginSchema = z.object({
   ok: z.literal(true),
   tenantId: z.string(),
   connectionId: z.string().uuid(),
+  sourceId: z.string().uuid(),
+  discoveredResources: z.number().int().nonnegative(),
+  schemaVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  schemaChanged: z.boolean(),
+  configurationUrl: z.string().url(),
 });
 const submissionSchema = z.object({
   patchId: z.string(),
@@ -263,14 +268,18 @@ test("a first login provisions one Tenant and connects the local CLI", async ({
   try {
     await content.query(`CREATE SCHEMA "${namespace}"`);
     await content.query(
+      `CREATE TYPE "${namespace}".article_status AS ENUM ('', ' pending ', 'a,b')`,
+    );
+    await content.query(
       `CREATE TABLE "${namespace}".articles (
         id integer PRIMARY KEY,
         title text NOT NULL,
+        status "${namespace}".article_status NOT NULL DEFAULT ' pending ',
         private_note text NOT NULL
       )`,
     );
     await content.query(
-      `INSERT INTO "${namespace}".articles VALUES (1, 'Old title', 'never uploaded')`,
+      `INSERT INTO "${namespace}".articles (id, title, private_note) VALUES (1, 'Old title', 'never uploaded')`,
     );
 
     await signInWithFreshCode();
@@ -392,9 +401,124 @@ test("a first login provisions one Tenant and connects the local CLI", async ({
       await cli(["login", "--server", "http://127.0.0.1:3110"], clientToken),
     );
     expect(connected.tenantId).toBe(tenantId);
+    expect(connected.sourceId).toBe(connected.connectionId);
+    expect(connected.discoveredResources).toBeGreaterThan(0);
+    expect(connected.schemaChanged).toBe(true);
+
+    const metadataResponse = await request.get(
+      `/api/patchctl/sources/${connected.sourceId}/metadata`,
+      { headers: { Authorization: `Bearer ${clientToken}` } },
+    );
+    expect(metadataResponse.status()).toBe(200);
+    const metadataBody = await metadataResponse.text();
+    expect(metadataBody).toContain(`${namespace}.articles`);
+    expect(metadataBody).toContain("private_note");
+    expect(metadataBody).not.toContain("never uploaded");
+    expect(metadataBody).not.toContain(contentUrl);
+    expect(metadataBody).not.toContain(clientToken);
+    const storedSource = await metadata.query<{
+      tenantId: string;
+      providerKey: string;
+      authMethod: string;
+      secretEncrypted: string | null;
+      configJson: unknown;
+    }>(
+      `SELECT "tenantId", "providerKey", "authMethod", "secretEncrypted", "configJson"
+       FROM "IntegrationConnection" WHERE "id" = $1`,
+      [connected.sourceId],
+    );
+    expect(storedSource.rows).toHaveLength(1);
+    expect(storedSource.rows[0]).toMatchObject({
+      tenantId,
+      providerKey: "patchctl.local-postgres",
+      authMethod: "local-client",
+      secretEncrypted: null,
+    });
+    const storedDocument = JSON.stringify(storedSource.rows[0]!.configJson);
+    expect(storedDocument).toContain(`${namespace}.articles`);
+    expect(storedDocument).not.toContain(contentUrl);
+    expect(storedDocument).not.toContain("never uploaded");
+
+    await page.goto(connected.configurationUrl);
+    await expect(
+      page.getByRole("heading", { name: cliTenant, exact: true }),
+    ).toBeVisible();
+    const resourceConfiguration = page.getByTestId(
+      `source-resource-${namespace}.articles`,
+    );
+    await resourceConfiguration
+      .getByLabel(`Managed resource ${namespace}.articles`)
+      .check();
+    const titleField = resourceConfiguration
+      .getByRole("row")
+      .filter({ hasText: "title" });
+    await titleField.getByLabel(`${namespace}.articles title writable`).check();
+    const statusField = resourceConfiguration
+      .getByRole("row")
+      .filter({ hasText: "status" });
+    await expect(
+      statusField.getByLabel(`Enum value 1 for ${namespace}.articles status`, {
+        exact: true,
+      }),
+    ).toHaveValue("");
+    await expect(
+      statusField.getByLabel(`Enum value 2 for ${namespace}.articles status`, {
+        exact: true,
+      }),
+    ).toHaveValue(" pending ");
+    await expect(
+      statusField.getByLabel(`Enum value 3 for ${namespace}.articles status`, {
+        exact: true,
+      }),
+    ).toHaveValue("a,b");
+    await statusField
+      .getByLabel(`Enum value 2 for ${namespace}.articles status`, {
+        exact: true,
+      })
+      .fill(" changed ");
+    await page.getByRole("button", { name: "Save configuration" }).click();
+    await expect(page.getByRole("status")).toContainText(
+      "Source configuration saved.",
+    );
+    const configuredSource = await metadata.query<{ configJson: unknown }>(
+      `SELECT "configJson" FROM "IntegrationConnection" WHERE "id" = $1`,
+      [connected.sourceId],
+    );
+    expect(configuredSource.rows[0]?.configJson).toMatchObject({
+      configuration: {
+        resources: expect.arrayContaining([
+          expect.objectContaining({
+            name: `${namespace}.articles`,
+            fields: expect.arrayContaining([
+              expect.objectContaining({
+                name: "status",
+                enumValues: ["", " changed ", "a,b"],
+              }),
+            ]),
+          }),
+        ]),
+      },
+    });
+
+    expect(await cli(["schema"], clientToken)).toMatchObject({
+      schemaSynced: false,
+      schemaVersion: connected.schemaVersion,
+      resources: [
+        {
+          name: `${namespace}.articles`,
+          fields: expect.arrayContaining([
+            expect.objectContaining({ name: "id", readonly: true }),
+            expect.objectContaining({ name: "title", readonly: false }),
+          ]),
+        },
+      ],
+    });
 
     await cli(["patch", "start", "--title", "Account E2E title update"]);
-    await cli(["update", "articles", "1", "--set", "title=New title"]);
+    await cli(
+      ["update", "articles", "1", "--set", "title=New title"],
+      clientToken,
+    );
     expect(await cli(["diff"])).toMatchObject({
       operations: [
         {
@@ -404,7 +528,10 @@ test("a first login provisions one Tenant and connects the local CLI", async ({
         },
       ],
     });
-    expect(await cli(["validate"])).toMatchObject({ valid: true, errors: [] });
+    expect(await cli(["validate"], clientToken)).toMatchObject({
+      valid: true,
+      errors: [],
+    });
 
     const proposal = submissionSchema.parse(await cli(["submit"], clientToken));
     expect(await cli(["submit"], clientToken)).toMatchObject({
